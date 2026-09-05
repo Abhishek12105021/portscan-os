@@ -1,0 +1,3 @@
+# Core scanner and defense use only the Python standard library + Npcap.
+# The SSH exploit module requires paramiko for SSH protocol interaction.
+paramiko>=3.0
