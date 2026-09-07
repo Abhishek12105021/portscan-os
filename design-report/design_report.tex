@@ -1,0 +1,1065 @@
+\documentclass[11pt,a4paper]{article}
+
+% ----------------------------------------------------------------------
+% Page Geometry and Layout
+% ----------------------------------------------------------------------
+\usepackage[margin=2.2cm, top=2.3cm, bottom=2.3cm]{geometry}
+
+% ----------------------------------------------------------------------
+% Typography and Fonts
+% ----------------------------------------------------------------------
+\usepackage{mathptmx}             % Times Roman text and matching math font
+\usepackage[scaled=0.92]{helvet}  % Clean Helvetica for sans-serif
+\usepackage{courier}              % Courier for monospace
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{parskip}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5.5pt}
+
+% ----------------------------------------------------------------------
+% Mathematical Packages
+% ----------------------------------------------------------------------
+\usepackage{amsmath, amssymb}
+\usepackage{bm}
+
+% ----------------------------------------------------------------------
+% Tables and Lists
+% ----------------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{float}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.5em}
+
+% ----------------------------------------------------------------------
+% Caption Formatting
+% ----------------------------------------------------------------------
+\usepackage{caption}
+\captionsetup{
+    labelfont={bf,sf,color=primary},
+    textfont={small},
+    labelsep=colon,
+    skip=7pt
+}
+
+% ----------------------------------------------------------------------
+% Colors and Visual Elements
+% ----------------------------------------------------------------------
+\usepackage{xcolor}
+\definecolor{primary}{RGB}{15, 44, 89}      % Deep Navy Blue
+\definecolor{secondary}{RGB}{31, 110, 140}  % Slate Blue
+\definecolor{accent}{RGB}{43, 91, 169}     % Royal Accent
+\definecolor{lightbg}{RGB}{246, 248, 250}   % Soft Neutral Light Gray
+\definecolor{darkslate}{RGB}{33, 37, 41}   % Charcoal Text
+\definecolor{alertred}{RGB}{192, 41, 43}    % Structured Warning Red
+\definecolor{successgreen}{RGB}{39, 174, 96}% Success Green
+\definecolor{codebg}{RGB}{240, 243, 246}    % Code Box Background
+\definecolor{frameborder}{RGB}{209, 217, 224}
+
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit, backgrounds, patterns}
+
+% ----------------------------------------------------------------------
+% Boxes and Callouts (tcolorbox)
+% ----------------------------------------------------------------------
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable}
+
+\newtcolorbox{terminalbox}[1][]{%
+    colback=codebg,
+    colframe=primary,
+    coltitle=white,
+    fonttitle=\bfseries\small\sffamily,
+    title={#1},
+    sharp corners,
+    boxrule=1pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt,
+    fontupper=\ttfamily\footnotesize,
+    breakable
+}
+
+\newtcolorbox{summarybox}[1][]{%
+    colback=lightbg,
+    colframe=secondary,
+    coltitle=white,
+    fonttitle=\bfseries\small\sffamily,
+    title={#1},
+    sharp corners,
+    boxrule=1pt,
+    left=9pt, right=9pt, top=6pt, bottom=6pt,
+    fontupper=\small,
+    breakable
+}
+
+% ----------------------------------------------------------------------
+% Section Heading Styling (titlesec)
+% ----------------------------------------------------------------------
+\usepackage{titlesec}
+\titleformat{\section}
+  {\color{primary}\normalfont\Large\bfseries\sffamily}
+  {\thesection}{1em}{}[\color{primary}\titlerule]
+\titlespacing*{\section}{0pt}{14pt plus 2pt minus 2pt}{6pt plus 1pt minus 1pt}
+
+\titleformat{\subsection}
+  {\color{secondary}\normalfont\large\bfseries\sffamily}
+  {\thesubsection}{0.8em}{}
+\titlespacing*{\subsection}{0pt}{11pt plus 2pt minus 1pt}{4pt plus 1pt minus 1pt}
+
+\titleformat{\subsubsection}
+  {\color{darkslate}\normalfont\normalsize\bfseries\sffamily}
+  {\thesubsubsection}{0.6em}{}
+\titlespacing*{\subsubsection}{0pt}{8pt plus 1pt minus 1pt}{3pt plus 1pt minus 1pt}
+
+% ----------------------------------------------------------------------
+% Headers and Footers (fancyhdr)
+% ----------------------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\headheight}{14.5pt}
+\fancyhf{}
+\fancyhead[L]{\small\textbf{\color{primary}PortScan-OS} \ --- \ {\color{secondary}Project Design Report}}
+\fancyhead[R]{\small\color{darkslate!80}CSE 406 $\cdot$ 2105032 $\cdot$ 2105033}
+\fancyfoot[L]{\small\color{darkslate!75}Port Scanning with OS Detection and Exploitation}
+\fancyfoot[R]{\small\bfseries\color{primary}Page \thepage}
+\renewcommand{\headrulewidth}{0.75pt}
+\renewcommand{\headrule}{%
+  \vskip 2.5pt%
+  {\color{secondary!60}\hrule height \headrulewidth width \headwidth}%
+  \vskip -\headrulewidth%
+}
+\renewcommand{\footrulewidth}{0.4pt}
+\renewcommand{\footrule}{{\color{frameborder}\hrule height \footrulewidth width \headwidth \vskip-\footrulewidth}}
+
+% ----------------------------------------------------------------------
+% Hyperlinks
+% ----------------------------------------------------------------------
+\usepackage[
+    colorlinks=true,
+    linkcolor=primary,
+    citecolor=secondary,
+    urlcolor=accent,
+    bookmarksnumbered=true
+]{hyperref}
+
+% ----------------------------------------------------------------------
+% Document Body
+% ----------------------------------------------------------------------
+\begin{document}
+
+% ----------------------------------------------------------------------
+% Cover Page (Page 1)
+% ----------------------------------------------------------------------
+\thispagestyle{empty}
+
+% Top-Right Header Block
+\begin{flushright}
+    {\color{darkslate!75}\large\scshape CYBER SECURITY PROJECT DESIGN REPORT}\\[4pt]
+    {\color{darkslate!85}\normalsize\bfseries CSE406 -- Cyber Security Sessional}
+\end{flushright}
+
+\vspace*{2.0cm}
+
+% Hero Title with Left Vertical Accent Bar
+\noindent
+{\color{secondary}\vrule width 5.5pt}%
+\hspace*{18pt}%
+\begin{minipage}{\dimexpr\textwidth-26pt\relax}
+    {\fontsize{34pt}{40pt}\selectfont\bfseries\color{primary} PortScan-OS}\\[10pt]
+    {\LARGE\bfseries\color{secondary} Port Scanning with OS Information and Version Detection}\\[10pt]
+    {\large\itshape\color{darkslate} A Custom Attack Toolkit and Defensive Countermeasure Architecture from Scratch}
+\end{minipage}
+
+\vspace*{2.0cm}
+
+% Metadata Block (Left-Aligned, Bold Blue Labels)
+\noindent
+{\large\setlength{\tabcolsep}{14pt}\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}ll@{}}
+    \textbf{\color{secondary} Assigned Topic:}        & 8 \\
+    \textbf{\color{secondary} Topic Title:}        & Port Scanning with OS information / version \\
+    \textbf{\color{secondary} Subsection:}   & A2 \\
+    \textbf{\color{secondary} Supervisor:}   & \textbf{Anwarul Bashir Shuaib} \\
+    \textbf{\color{secondary} Submitted By:} & \textbf{Nawriz Ahmed Turjo (2105032)} \\
+                                             & \textbf{Abhishek Roy (2105033)} \\
+\end{tabular}}
+
+\vfill
+
+% Bottom Summary Box
+\noindent
+\begin{tcolorbox}[
+    colback=lightbg,
+    colframe=secondary!55,
+    arc=3pt,
+    boxrule=1.1pt,
+    left=20pt, right=20pt, top=14pt, bottom=14pt
+]
+    \centering
+    {\bfseries\Large\color{secondary} Core Attack Pipeline \& Defensive Countermeasures}\\[12pt]
+    \normalsize
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lr@{}}
+        \textbf{Raw Layer-2 TCP SYN Port Scanner} & \textbf{Heuristic TCP/IP OS Fingerprinting} \\[4pt]
+        Stream Banner Grabbing (FTP \& HTTP) & Sliding-Window Dynamic Firewall Defense \\
+    \end{tabular*}
+\end{tcolorbox}
+
+\vspace*{1.0cm}
+
+\clearpage
+
+% ----------------------------------------------------------------------
+% 1. Overview of the Project Idea
+% ----------------------------------------------------------------------
+\section{Overview of the Project Idea}
+
+\subsection{Problem Statement and Threat Model}
+Network reconnaissance determines which communication channels and service ports are reachable across a network perimeter, what software daemon versions run on those ports, and what operating system kernel manages the host. While off-the-shelf tools like Nmap automate this process, building a custom reconnaissance engine demonstrates how raw packets are serialized and parsed on Windows. Operating within an adjacent local subnet, this toolkit manually constructs Ethernet, IPv4, and TCP frames to identify reachable ports, fingerprint the host operating system, and validate exposed services within defined safety limits.
+
+\subsection{Project Scope and Five-Phase Attack Chain}
+The project organizes its workflow into five attack phases alongside a concurrent defensive module:
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\caption{Five-Phase Reconnaissance and Attack Architecture}
+\label{tab:phases}
+\begin{tabularx}{\textwidth}{>{\centering\arraybackslash\bfseries}p{1.4cm} >{\raggedright\arraybackslash\bfseries}p{3.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Phase} & \textbf{Designation} & \textbf{Operational Focus} & \textbf{Engineering Mechanism} \\
+\midrule
+1 & TCP SYN Port Scan & Detect Open, Closed, and Filtered ports & Raw Layer-2 frame construction via Npcap; half-open scan without completing the 3-way handshake. \\
+\rowcolor{lightbg}
+2 & Banner Grabbing & Service and version identification & Standard stream sockets querying listening daemons (passive capture for FTP, active HTTP probes). \\
+3 & OS Fingerprinting & Identify target host operating system & Heuristic analysis of SYN/ACK response headers: initial TTL, window size, MSS, and TCP option sequences. \\
+\rowcolor{lightbg}
+4 & Vulnerability Match & Map findings to attack surfaces & Automated mapping between extracted daemon versions and known proof-of-concept exploit vectors. \\
+5 & Exploit Execution & Demonstrate concrete security compromise & Automated dispatch of anonymous FTP authentication and HTTP directory path traversal payloads. \\
+\midrule
+\textbf{Defense} & \textbf{Scan Detection \& Block} & Passive detection and dynamic mitigation & Sliding-window inspection tracking SYN packet rates and destination port diversity with dynamic Windows Firewall rule generation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Core Design Principles}
+\begin{itemize}[nosep, leftmargin=1.5em]
+    \item \textbf{From-Scratch Packet Construction:} All Ethernet frames, IPv4 packets, and TCP segments are assembled byte by byte in binary format. The implementation avoids high-level network construction abstractions.
+    \item \textbf{Direct Checksum Computation:} Checksum fields for both IPv4 headers and TCP segments (with their accompanying pseudo-headers) are computed via a custom 16-bit one's complement Internet checksum implementation following RFC 1071.
+    \item \textbf{Npcap as Hardware Interface:} The toolkit uses Npcap strictly as a low-level packet I/O driver on Windows via Python \texttt{ctypes}. All probe dispatching, frame sequencing, and response interpretation run in custom application code.
+    \item \textbf{Strict Safety Boundaries:} The toolkit restricts scanning to private IPv4 address spaces (RFC 1918), caps targets at 50 ports per run, and enforces an inter-probe delay of at least 0.2 seconds to prevent denial of service conditions.
+\end{itemize}
+
+\clearpage
+
+% ----------------------------------------------------------------------
+% 2. Network Topology and Components
+% ----------------------------------------------------------------------
+\section{Network Topology and System Components}
+
+\subsection{Laboratory Network Architecture}
+The experimental testbed operates within an isolated private local subnet (such as \texttt{192.168.1.0/24} on a dedicated physical switch or a host-only virtualized hypervisor segment). Both nodes share the same Layer-2 broadcast domain because the custom scanner crafts raw Ethernet frames and performs Address Resolution Protocol (ARP) queries directly to obtain target MAC addresses.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily,
+    line/.style={draw=darkslate, very thick}
+]
+    % ------------------------------------------------------------------
+    % Left Card: Attacker Machine
+    % ------------------------------------------------------------------
+    \node[draw=primary, thick, fill=primary, text=white, rounded corners=3pt, minimum width=5.2cm, minimum height=0.75cm, font=\sffamily\bfseries\small] (atk_hdr) at (0, 2.1) {Attacker Workstation (Windows)};
+    \node[draw=primary!30, fill=primary!8, font=\sffamily\scriptsize, text width=5.0cm, align=center, inner sep=2.5pt] (atk_sub) at (0, 1.45) {\textbf{IP:} 192.168.1.10 \ \ $\vert$ \ \ \textbf{MAC:} 00:0C:29:11:22:33};
+    \node[draw=primary!40, fill=lightbg, font=\sffamily\scriptsize, text width=5.0cm, align=flush left, inner sep=6pt, rounded corners=2pt] (atk_body) at (0, -0.3) {
+        \textbf{\color{primary}Custom Attack Toolkit:}\\[2pt]
+        $\bullet$ Raw SYN Packet Builder (\texttt{packet.py})\\
+        $\bullet$ RFC 1071 16-Bit Checksum Engine\\
+        $\bullet$ Banner Grabber \& OS Classifier\\
+        $\bullet$ Exploit Modules (FTP, HTTP)\\[3pt]
+        \textbf{\color{secondary}Npcap Kernel Driver (\texttt{ctypes})}
+    };
+    \node[draw=primary, thick, rounded corners=4pt, fit=(atk_hdr) (atk_sub) (atk_body), inner sep=4pt] (atk_card) {};
+
+    % ------------------------------------------------------------------
+    % Center: Layer-2 Switch
+    % ------------------------------------------------------------------
+    \node[draw=secondary, very thick, fill=secondary!12, rounded corners=4pt, text width=3.4cm, align=center, inner sep=8pt] (switch) at (7.4, 0.4) {
+        \textbf{\color{primary}\large Layer-2 Switch}\\[3pt]
+        {\scriptsize Subnet: 192.168.1.0/24\\[1pt]
+        Ethernet Broadcast Domain\\[1pt]
+        Port Mirror / Sniffer Tap}
+    };
+
+    % ------------------------------------------------------------------
+    % Right Card: Victim Machine
+    % ------------------------------------------------------------------
+    \node[draw=alertred, thick, fill=alertred, text=white, rounded corners=3pt, minimum width=5.2cm, minimum height=0.75cm, font=\sffamily\bfseries\small] (vic_hdr) at (14.8, 2.1) {Target Host (Victim Machine)};
+    \node[draw=alertred!30, fill=alertred!8, font=\sffamily\scriptsize, text width=5.0cm, align=center, inner sep=2.5pt] (vic_sub) at (14.8, 1.45) {\textbf{IP:} 192.168.1.25 \ \ $\vert$ \ \ \textbf{MAC:} 00:0C:29:AA:BB:CC};
+    \node[draw=alertred!40, fill=alertred!5, font=\sffamily\scriptsize, text width=5.0cm, align=flush left, inner sep=6pt, rounded corners=2pt] (vic_body) at (14.8, -0.3) {
+        \textbf{\color{alertred}Target Services \& Daemons:}\\[2pt]
+        $\bullet$ Port 21: Vulnerable FTP (Anonymous)\\
+        $\bullet$ Port 80: HTTP Server (Path Traversal)\\
+        $\bullet$ Port 445: Windows SMB Services\\[3pt]
+        \textbf{\color{darkslate}Host OS: Windows 10/11 Kernel}
+    };
+    \node[draw=alertred, thick, rounded corners=4pt, fit=(vic_hdr) (vic_sub) (vic_body), inner sep=4pt] (vic_card) {};
+
+    % ------------------------------------------------------------------
+    % Bottom Card: Defensive Monitoring Module
+    % ------------------------------------------------------------------
+    \node[draw=secondary, thick, fill=secondary, text=white, rounded corners=3pt, minimum width=6.8cm, minimum height=0.7cm, font=\sffamily\bfseries\small] (def_hdr) at (7.4, -2.6) {Defensive Monitoring Module (Victim Host)};
+    \node[draw=secondary!40, fill=secondary!8, font=\sffamily\scriptsize, text width=6.4cm, align=flush left, inner sep=6pt, rounded corners=2pt] (def_body) at (7.4, -3.5) {
+        $\bullet$ Passive SYN Packet Sniffer (\texttt{pcap\_next\_ex} in Promiscuous Mode)\\
+        $\bullet$ Sliding-Window Inspection ($W = 10\text{s}, \theta_{\text{count}} = 8, \theta_{\text{ports}} = 5$)\\
+        $\bullet$ Automated Dynamic Firewall Mitigation (\texttt{netsh advfirewall})
+    };
+    \node[draw=secondary, thick, rounded corners=4pt, fit=(def_hdr) (def_body), inner sep=4pt] (def_card) {};
+
+    % ------------------------------------------------------------------
+    % Interconnecting Lines with Dedicated Pill Badges
+    % ------------------------------------------------------------------
+    \draw[{Stealth[length=6pt]}-{Stealth[length=6pt]}, very thick, color=primary] 
+        (atk_card.east |- switch.center) -- (switch.west) 
+        node[midway, above=3pt, font=\sffamily\scriptsize\bfseries, fill=white, inner sep=2.5pt, rounded corners=2pt, draw=frameborder] {Raw Ethernet Frames};
+
+    \draw[{Stealth[length=6pt]}-{Stealth[length=6pt]}, very thick, color=alertred] 
+        (switch.east) -- (vic_card.west |- switch.center) 
+        node[midway, above=3pt, font=\sffamily\scriptsize\bfseries, fill=white, inner sep=2.5pt, rounded corners=2pt, draw=frameborder] {Target Responses};
+
+    \draw[-{Stealth[length=6pt]}, very thick, color=secondary] 
+        (switch.south) -- (def_card.north) 
+        node[midway, right=6pt, font=\sffamily\scriptsize\bfseries, fill=white, inner sep=2.5pt, rounded corners=2pt, draw=frameborder] {Passive Port Mirror / Tap};
+
+\end{tikzpicture}%
+}
+\caption{Laboratory Network Topology, Host Roles, and Traffic Monitoring Architecture}
+\label{fig:topology}
+\end{figure}
+
+\vspace{6pt}
+\subsection{Component Specifications}
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.24}
+\caption{System Component Inventory and Operational Responsibilities}
+\label{tab:components}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{2.8cm} >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Component} & \textbf{Host Machine} & \textbf{Software Basis} & \textbf{Role in Evaluation} \\
+\midrule
+SYN Scanner & Attacker & Python / \texttt{packet.py} & Builds raw Ethernet/IPv4/TCP frames, dispatches SYN packets, and logs responses. \\
+\rowcolor{lightbg}
+Banner Grabber & Attacker & Python / \texttt{banner.py} & Performs stream handshakes to capture service banners from open ports. \\
+OS Classifier & Attacker & Python / \texttt{fingerprint.py} & Parses SYN/ACK attributes to calculate operating system probability scores. \\
+\rowcolor{lightbg}
+Exploit Suite & Attacker & Python / \texttt{exploits/} & Executes targeted exploit modules against confirmed vulnerable ports. \\
+Npcap Driver & Attacker/Victim & Npcap Native DLLs & Provides low-level kernel packet capture and raw transmission interfaces. \\
+\rowcolor{lightbg}
+Vulnerable FTP & Victim & Python / \texttt{ftp\_server.py} & Simulates standard RFC 959 FTP with anonymous read authorization. \\
+Vulnerable HTTP & Victim & Python / \texttt{http\_server.py} & Web server with intentional path traversal vulnerability (CVE-2021-41773 analogue). \\
+\rowcolor{lightbg}
+Defense Monitor & Victim & Python / \texttt{detector.py} & Passive traffic sniffer calculating sliding-window SYN probe arrival rates. \\
+Firewall Agent & Victim & Windows \texttt{netsh} & Injects dynamic inbound blocking rules when scanning thresholds are breached. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\clearpage
+
+% ----------------------------------------------------------------------
+% 3. Protocol and Attack Timing Diagrams
+% ----------------------------------------------------------------------
+\section{Protocol Mechanics and Attack Timing Diagrams}
+
+\subsection{Original Protocol vs. SYN Port Scan Mechanics}
+Standard TCP (RFC 793) connections complete a full three-way handshake: SYN $\to$ SYN/ACK $\to$ ACK. Application listeners accept and log the connection only after the final ACK arrives.
+
+In contrast, our TCP SYN scanner performs a half-open scan. It sends a single SYN probe and inspects the reply. If the port is open, the target returns a SYN/ACK. The scanner records the open state and withholds the final ACK, leaving the connection unestablished and typically unlogged by user-space applications. If the port is closed, the target kernel returns a RST packet. If a firewall drops the probe, no packet arrives before the 1.5-second timeout expires.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (a) Standard RFC 793 Handshake}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (c) at (0, 0) {Client};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (s) at (4.2, 0) {Server};
+    
+    \draw[thick, color=primary] (c.south) -- (0, -3.8);
+    \draw[thick, color=alertred] (s.south) -- (4.2, -3.8);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {SYN ($seq = x$)} (4.2, -1.2);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (4.2, -1.6) -- node[above, sloped, font=\scriptsize] {SYN/ACK ($seq = y, ack = x+1$)} (0, -2.2);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -2.6) -- node[above, sloped, font=\scriptsize] {ACK ($ack = y+1$)} (4.2, -3.2);
+    
+    \node[draw=successgreen, fill=successgreen!10, rounded corners=2pt, font=\scriptsize\bfseries, align=center, text=successgreen!50!black] at (2.1, -3.6) {Connection ESTABLISHED (Logged)};
+\end{tikzpicture}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (b) Half-Open SYN Scan: Open Port}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (sc) at (0, 0) {Scanner};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (th) at (4.2, 0) {Target Host};
+    
+    \draw[thick, color=primary] (sc.south) -- (0, -3.8);
+    \draw[thick, color=alertred] (th.south) -- (4.2, -3.8);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {Raw SYN ($dst\_port = 80$)} (4.2, -1.1);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.2, -1.4) -- node[above, sloped, font=\scriptsize] {SYN/ACK ($flags = \text{0x12}$)} (0, -1.9);
+    
+    \draw[-{Stealth[length=4pt]}, thick, dashed, color=alertred] (0, -2.6) -- (2.8, -2.6);
+    \draw[thick, color=alertred] (2.65, -2.45) -- (2.95, -2.75);
+    \draw[thick, color=alertred] (2.65, -2.75) -- (2.95, -2.45);
+    \node[above=1pt, font=\scriptsize\color{alertred}\bfseries] at (1.55, -2.55) {Withhold Final ACK};
+    
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\scriptsize\bfseries, align=center, text=primary] at (2.1, -3.5) {Port State: \textbf{OPEN} (Unlogged)};
+\end{tikzpicture}
+\end{minipage}
+
+\vspace{12pt}
+
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (c) Half-Open SYN Scan: Closed Port}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (sc) at (0, 0) {Scanner};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (th) at (4.2, 0) {Target Host};
+    
+    \draw[thick, color=primary] (sc.south) -- (0, -3.6);
+    \draw[thick, color=alertred] (th.south) -- (4.2, -3.6);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {Raw SYN ($dst\_port = 443$)} (4.2, -1.2);
+    \draw[-{Stealth[length=5pt]}, thick, color=alertred] (4.2, -1.6) -- node[above, sloped, font=\scriptsize] {RST ($flags = \text{0x04}$)} (0, -2.2);
+    
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\scriptsize\bfseries, align=center, text=alertred] at (2.1, -3.0) {Port State: \textbf{CLOSED} (Kernel Discard)};
+\end{tikzpicture}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (d) Half-Open SYN Scan: Filtered Port}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (sc) at (0, 0) {Scanner};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=1.8cm] (th) at (4.2, 0) {Firewall / Target};
+    
+    \draw[thick, color=primary] (sc.south) -- (0, -3.6);
+    \draw[thick, color=alertred] (th.south) -- (4.2, -3.6);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {Raw SYN ($dst\_port = 8080$)} (3.9, -1.2);
+    \node[draw=alertred, fill=alertred!15, rounded corners=2pt, font=\tiny\bfseries, text=alertred] at (4.2, -1.2) {DROP};
+    
+    \draw[thick, dashed, color=darkslate] (0.8, -1.9) -- (3.4, -1.9) 
+        node[midway, above, font=\scriptsize\color{darkslate}] {No Response Packet Received};
+    \node[draw=frameborder, fill=lightbg, rounded corners=2pt, font=\scriptsize, align=center] at (2.1, -2.4) {Scanner waits for timeout ($t_{\text{timeout}} = 1.5\,\text{s}$)};
+    
+    \node[draw=darkslate, fill=lightbg, rounded corners=2pt, font=\scriptsize\bfseries, align=center, text=darkslate] at (2.1, -3.1) {Port State: \textbf{FILTERED} (Timeout)};
+\end{tikzpicture}
+\end{minipage}
+\caption{Protocol Timing Diagrams Comparing Standard TCP Handshake with Scanner Probe Classifications}
+\label{fig:timing_scan}
+\end{figure}
+
+\subsection{Service Banner Grabbing Timing Sequences}
+Banner grabbing extracts identification strings from services running on open ports. As shown in Figure~\ref{fig:timing_banner}, banner grabbing follows two patterns depending on whether the target service is passive or active:
+\begin{itemize}
+    \item \textbf{Passive Services (e.g., FTP, SMTP):} The listening daemon transmits an informational greeting banner immediately upon completion of the initial TCP 3-way handshake. The grabber establishes a standard connection, reads the incoming buffer, and terminates cleanly.
+    \item \textbf{Active Services (HTTP):} Web daemons do not output unprompted greetings. The grabber establishes a connection, issues a minimal RFC-compliant probe (\texttt{HEAD / HTTP/1.0\textbackslash r\textbackslash n\textbackslash r\textbackslash n}), and extracts the software identification from the HTTP \texttt{Server:} header.
+\end{itemize}
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (a) Passive Service Banner: FTP (Port 21)}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (g) at (0, 0) {Banner Grabber};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (s) at (4.5, 0) {FTP Server (:21)};
+    
+    \draw[thick, color=primary] (g.south) -- (0, -4.5);
+    \draw[thick, color=alertred] (s.south) -- (4.5, -4.5);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {TCP 3-Way Handshake} (4.5, -1.2);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -1.7) -- node[above, sloped, font=\scriptsize\ttfamily] {220 vsftpd 3.0.3\textbackslash r\textbackslash n} (0, -2.3);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -2.8) -- node[above, sloped, font=\scriptsize\ttfamily] {QUIT\textbackslash r\textbackslash n} (4.5, -3.4);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (4.5, -3.7) -- node[above, sloped, font=\scriptsize\ttfamily] {221 Goodbye} (0, -4.2);
+\end{tikzpicture}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (b) Active Service Banner: HTTP (Port 80)}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (g) at (0, 0) {Banner Grabber};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (s) at (4.5, 0) {HTTP Server (:80)};
+    
+    \draw[thick, color=primary] (g.south) -- (0, -4.5);
+    \draw[thick, color=alertred] (s.south) -- (4.5, -4.5);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {TCP 3-Way Handshake} (4.5, -1.2);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -1.7) -- node[above, sloped, font=\scriptsize\ttfamily] {HEAD / HTTP/1.0\textbackslash r\textbackslash n\textbackslash r\textbackslash n} (4.5, -2.3);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -2.8) -- node[above, sloped, font=\scriptsize\ttfamily] {HTTP/1.0 200 OK} (0, -3.4);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -3.5) -- node[above, sloped, font=\scriptsize\ttfamily] {Server: Apache/2.4.49} (0, -4.0);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -4.1) -- node[above, sloped, font=\scriptsize] {TCP FIN Close} (4.5, -4.4);
+\end{tikzpicture}
+\end{minipage}
+\caption{Timing Sequences for Passive Banner Capture and Active Application Probing}
+\label{fig:timing_banner}
+\end{figure}
+
+\subsection{Targeted Exploit Execution Timing}
+After cataloging open ports and daemon versions, the orchestrator runs the targeted exploit modules. Figure~\ref{fig:timing_exploits} outlines the message sequences for anonymous FTP data access and HTTP path traversal.
+
+\begin{figure}[ht]
+\centering
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (a) Exploit 1: FTP Anonymous Access}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (e) at (0, 0) {Exploit Engine};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (s) at (4.5, 0) {FTP Server (:21)};
+    
+    \draw[thick, color=primary] (e.south) -- (0, -5.2);
+    \draw[thick, color=alertred] (s.south) -- (4.5, -5.2);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize\ttfamily] {USER anonymous\textbackslash r\textbackslash n} (4.5, -1.1);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (4.5, -1.4) -- node[above, sloped, font=\scriptsize\ttfamily] {331 Specify password} (0, -1.9);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -2.2) -- node[above, sloped, font=\scriptsize\ttfamily] {PASS anon@lab\textbackslash r\textbackslash n} (4.5, -2.7);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -3.0) -- node[above, sloped, font=\scriptsize\ttfamily] {230 Login successful} (0, -3.5);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -3.8) -- node[above, sloped, font=\scriptsize] {\texttt{LIST\textbackslash r\textbackslash n} (Passive Data)} (4.5, -4.3);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -4.6) -- node[above, sloped, font=\scriptsize] {Directory file index returned} (0, -5.1);
+\end{tikzpicture}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\centering
+{\color{primary}\sffamily\bfseries\small (b) Exploit 2: HTTP Directory Path Traversal}\\[6pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    \node[draw=primary, fill=primary!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (e) at (0, 0) {Exploit Engine};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\sffamily\bfseries\footnotesize, inner sep=4pt, minimum width=2.2cm] (s) at (4.5, 0) {HTTP Server (:80)};
+    
+    \draw[thick, color=primary] (e.south) -- (0, -5.2);
+    \draw[thick, color=alertred] (s.south) -- (4.5, -5.2);
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {TCP 3-Way Handshake} (4.5, -1.1);
+    \draw[-{Stealth[length=5pt]}, thick, color=alertred] (0, -1.6) -- node[above, sloped, font=\scriptsize\ttfamily] {GET /../../windows/win.ini} (4.5, -2.3);
+    
+    % Centered callout box
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\tiny\sffamily, align=center] at (2.25, -2.8) {
+        \textbf{Missing Path Sanitization}\\Traverses Outside Document Root
+    };
+    
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -3.4) -- node[above, sloped, font=\scriptsize\ttfamily] {HTTP/1.0 200 OK} (0, -4.0);
+    \draw[-{Stealth[length=5pt]}, thick, color=successgreen] (4.5, -4.2) -- node[above, sloped, font=\scriptsize] {[System File Content Returned]} (0, -4.8);
+    \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -4.9) -- node[above, sloped, font=\scriptsize] {Connection Closed} (4.5, -5.1);
+\end{tikzpicture}
+\end{minipage}
+\caption{Protocol Interactions Demonstrating Concrete Exploit Outcomes}
+\label{fig:timing_exploits}
+\end{figure}
+
+\subsection{Defense Detection and Mitigation Timeline}
+Figure~\ref{fig:timing_defense} shows the defense monitor timeline. Incoming SYN packets update a sliding-window queue on the target host. When probe volume reaches 8 SYN packets across at least 5 distinct ports within 10 seconds, the monitor triggers an alert and adds an inbound firewall rule blocking the scanner's IP. The network interface drops subsequent probes before they reach application sockets.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+    font=\sffamily\small,
+    scale=0.92, every node/.style={transform shape}
+]
+    % ------------------------------------------------------------------
+    % Time Axis
+    % ------------------------------------------------------------------
+    \draw[thick, -{Stealth[length=6pt]}, color=darkslate] (0, 0) -- (14.5, 0) node[right, font=\sffamily\footnotesize\bfseries] {Time (s)};
+    
+    % ------------------------------------------------------------------
+    % Sliding Observation Window Indicator Bar
+    % ------------------------------------------------------------------
+    \draw[secondary, thick, |-|] (0.5, 2.45) -- (8.8, 2.45) 
+        node[midway, above=1pt, font=\sffamily\scriptsize\bfseries, color=secondary] {Sliding Observation Window ($W = 10.0\,\text{s}$)};
+
+    % ------------------------------------------------------------------
+    % Staggered SYN Probe Impulses (Alternating Heights: 0.75 and 1.55)
+    % ------------------------------------------------------------------
+    % 1: t=0.0 (x=0.5)
+    \draw[thick, color=primary] (0.5, 0) -- (0.5, 0.75);
+    \fill[primary] (0.5, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (0.5, 0.95) {SYN :80};
+
+    % 2: t=1.0 (x=1.8)
+    \draw[thick, color=primary] (1.8, 0) -- (1.8, 1.55);
+    \fill[primary] (1.8, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (1.8, 1.75) {SYN :22};
+
+    % 3: t=2.0 (x=3.1)
+    \draw[thick, color=primary] (3.1, 0) -- (3.1, 0.75);
+    \fill[primary] (3.1, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (3.1, 0.95) {SYN :21};
+
+    % 4: t=3.0 (x=4.4)
+    \draw[thick, color=primary] (4.4, 0) -- (4.4, 1.55);
+    \fill[primary] (4.4, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (4.4, 1.75) {SYN :443};
+
+    % 5: t=4.0 (x=5.7)
+    \draw[thick, color=primary] (5.7, 0) -- (5.7, 0.75);
+    \fill[primary] (5.7, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (5.7, 0.95) {SYN :445};
+
+    % 6: t=5.0 (x=7.0)
+    \draw[thick, color=primary] (7.0, 0) -- (7.0, 1.55);
+    \fill[primary] (7.0, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (7.0, 1.75) {SYN :135};
+
+    % 7: t=6.0 (x=8.3)
+    \draw[thick, color=primary] (8.3, 0) -- (8.3, 0.75);
+    \fill[primary] (8.3, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (8.3, 0.95) {SYN :139};
+
+    % 8: t=7.0 (x=9.6) - THRESHOLD BREACH!
+    \draw[thick, color=primary] (9.6, 0) -- (9.6, 1.55);
+    \fill[primary] (9.6, 0) circle (2.5pt);
+    \node[draw=primary, fill=primary!12, rounded corners=2pt, font=\scriptsize\bfseries] at (9.6, 1.75) {SYN :3389};
+
+    % ------------------------------------------------------------------
+    % Axis Ticks and Time Labels
+    % ------------------------------------------------------------------
+    \foreach \x/\timeval in {0.5/0.0, 1.8/1.0, 3.1/2.0, 4.4/3.0, 5.7/4.0, 7.0/5.0, 8.3/6.0, 9.6/7.0, 12.5/8.5} {
+        \draw[thick] (\x, 0.08) -- (\x, -0.08) node[below=2pt, font=\scriptsize, fill=white, inner sep=1.5pt] {$t=\timeval$};
+    }
+
+    % ------------------------------------------------------------------
+    % Vertical Threshold Trigger Line and Badge (cleanly outside probe box)
+    % ------------------------------------------------------------------
+    \draw[thick, dashed, color=alertred] (9.6, 2.05) -- (9.6, 2.75);
+    \node[draw=alertred, fill=alertred!10, rounded corners=3pt, font=\scriptsize\bfseries, align=center] at (9.6, 3.2) {
+        \color{alertred}\textbf{THRESHOLD BREACHED}\\
+        \scriptsize $C = 8 \ge \theta_{\text{count}}, \ U = 8 \ge \theta_{\text{ports}}$
+    };
+
+    % ------------------------------------------------------------------
+    % Firewall Mitigation Callout Below Axis
+    % ------------------------------------------------------------------
+    \draw[-{Stealth[length=5pt]}, thick, color=alertred] (9.6, -0.55) -- (9.6, -1.05);
+    \node[draw=secondary, fill=secondary!15, rounded corners=3pt, font=\scriptsize, align=center] at (9.6, -1.5) {
+        \textbf{\color{primary}Dynamic Firewall Rule Injected via \texttt{netsh}}\\
+        \texttt{\footnotesize netsh advfirewall add rule dir=in action=block remoteip=192.168.1.10}
+    };
+
+    % ------------------------------------------------------------------
+    % Blocked 9th Probe at t=8.5 (x=12.5)
+    % ------------------------------------------------------------------
+    \draw[thick, color=alertred] (12.5, 0) -- (12.5, 1.4);
+    \fill[alertred] (12.5, 0) circle (2.5pt);
+    \node[draw=alertred, fill=alertred!20, rounded corners=2pt, font=\scriptsize\bfseries, align=center] at (12.5, 1.75) {
+        SYN $\to$ :8080\\
+        \color{alertred}\textbf{[BLOCKED]}
+    };
+    % Cross marker
+    \draw[line width=1.2pt, color=alertred] (12.3, 0.5) -- (12.7, 0.9);
+    \draw[line width=1.2pt, color=alertred] (12.3, 0.9) -- (12.7, 0.5);
+
+\end{tikzpicture}
+\caption{Timeline of Sliding-Window Scan Detection and Dynamic Firewall Rule Injection}
+\label{fig:timing_defense}
+\end{figure}
+
+\clearpage
+
+% ----------------------------------------------------------------------
+% 4. Packet and Frame Structure
+% ----------------------------------------------------------------------
+\section{Binary Packet and Frame Structure}
+
+\subsection{Layer 2: Ethernet II Frame Header}
+Every transmitted probe is encapsulated in an Ethernet II frame consisting of 14 header octets:
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[font=\sffamily\footnotesize]
+    \draw[thick, fill=primary!10] (0, 0) rectangle (4.5, 0.9) node[midway, align=center] {\textbf{Destination MAC Address}\\(6 Octets)};
+    \draw[thick, fill=secondary!10] (4.5, 0) rectangle (9.0, 0.9) node[midway, align=center] {\textbf{Source MAC Address}\\(6 Octets)};
+    \draw[thick, fill=accent!15] (9.0, 0) rectangle (12.0, 0.9) node[midway, align=center] {\textbf{EtherType}\\(2 Octets: \texttt{0x0800})};
+    \draw[thick, fill=lightbg, dashed] (12.0, 0) rectangle (14.5, 0.9) node[midway, align=center] {\textbf{Payload}\\\small(IPv4 Packet)};
+\end{tikzpicture}
+\caption{Layer 2 Ethernet II Frame Structure (Total Header: 14 Octets)}
+\label{fig:frame_eth}
+\end{figure}
+
+\subsection{Layer 3: IPv4 Packet Header}
+The IPv4 packet is constructed strictly according to RFC 791. Standard probes use a 20-byte base header without IP options:
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[scale=0.95, every node/.style={transform shape}, font=\sffamily\scriptsize]
+    % Header bit scale (0 to 31)
+    \draw[thick] (0, 4.5) rectangle (14, 0);
+    
+    % Bit labels
+    \node[above] at (0, 4.5) {0};
+    \node[above] at (1.75, 4.5) {4};
+    \node[above] at (3.5, 4.5) {8};
+    \node[above] at (7.0, 4.5) {16};
+    \node[above] at (10.5, 4.5) {24};
+    \node[above] at (14, 4.5) {31};
+
+    % Row 1: Version, IHL, DSCP/ECN, Total Length
+    \draw[thick] (0, 3.6) -- (14, 3.6);
+    \draw[thick] (1.75, 4.5) -- (1.75, 3.6);
+    \draw[thick] (3.5, 4.5) -- (3.5, 3.6);
+    \draw[thick] (7.0, 4.5) -- (7.0, 3.6);
+    \node at (0.875, 4.05) {\textbf{Version (4)}};
+    \node at (2.625, 4.05) {\textbf{IHL (4)}};
+    \node at (5.25, 4.05) {\textbf{DSCP / ECN (8)}};
+    \node at (10.5, 4.05) {\textbf{Total Length (16)}};
+
+    % Row 2: Identification, Flags, Fragment Offset
+    \draw[thick] (0, 2.7) -- (14, 2.7);
+    \draw[thick] (7.0, 3.6) -- (7.0, 2.7);
+    \draw[thick] (9.0, 3.6) -- (9.0, 2.7);
+    \node at (3.5, 3.15) {\textbf{Identification (16 bits)}};
+    \node at (8.0, 3.15) {\textbf{Flags (3)}};
+    \node at (11.5, 3.15) {\textbf{Fragment Offset (13 bits)}};
+
+    % Row 3: TTL, Protocol, Header Checksum
+    \draw[thick] (0, 1.8) -- (14, 1.8);
+    \draw[thick] (3.5, 2.7) -- (3.5, 1.8);
+    \draw[thick] (7.0, 2.7) -- (7.0, 1.8);
+    \node at (1.75, 2.25) {\textbf{Time to Live (8)}};
+    \node at (5.25, 2.25) {\textbf{Protocol: 6 = TCP (8)}};
+    \node at (10.5, 2.25) {\textbf{Header Checksum (16 bits)}};
+
+    % Row 4: Source IP
+    \draw[thick] (0, 0.9) -- (14, 0.9);
+    \node at (7.0, 1.35) {\textbf{Source IP Address (32 bits)}};
+
+    % Row 5: Destination IP
+    \node at (7.0, 0.45) {\textbf{Destination IP Address (32 bits)}};
+\end{tikzpicture}
+\caption{Layer 3 IPv4 Packet Header Format (20 Octets Base)}
+\label{fig:header_ipv4}
+\end{figure}
+
+\subsection{Layer 4: TCP Segment Header}
+The TCP header is serialized per RFC 793 with control flags explicitly set for the SYN half-open probe ($Flags = \text{0x02}$):
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[scale=0.95, every node/.style={transform shape}, font=\sffamily\scriptsize]
+    \draw[thick] (0, 4.5) rectangle (14, 0);
+
+    % Bit labels
+    \node[above] at (0, 4.5) {0};
+    \node[above] at (7.0, 4.5) {16};
+    \node[above] at (14, 4.5) {31};
+
+    % Row 1: Source and Destination Ports
+    \draw[thick] (0, 3.6) -- (14, 3.6);
+    \draw[thick] (7.0, 4.5) -- (7.0, 3.6);
+    \node at (3.5, 4.05) {\textbf{Source Port (16 bits)}};
+    \node at (10.5, 4.05) {\textbf{Destination Port (16 bits)}};
+
+    % Row 2: Sequence Number
+    \draw[thick] (0, 2.7) -- (14, 2.7);
+    \node at (7.0, 3.15) {\textbf{Sequence Number (32 bits, Randomized)}};
+
+    % Row 3: Acknowledgment Number
+    \draw[thick] (0, 1.8) -- (14, 1.8);
+    \node at (7.0, 2.25) {\textbf{Acknowledgment Number (32 bits, 0 for SYN probe)}};
+
+    % Row 4: Data Offset, Reserved, Flags, Window Size
+    \draw[thick] (0, 0.9) -- (14, 0.9);
+    \draw[thick] (2.0, 1.8) -- (2.0, 0.9);
+    \draw[thick] (3.5, 1.8) -- (3.5, 0.9);
+    \draw[thick] (7.0, 1.8) -- (7.0, 0.9);
+    \node at (1.0, 1.35) {\textbf{Offset(4)}};
+    \node at (2.75, 1.35) {\textbf{Res(3)}};
+    \node at (5.25, 1.35) {\textbf{Flags: SYN=1 (9)}};
+    \node at (10.5, 1.35) {\textbf{Window Size (16 bits)}};
+
+    % Row 5: Checksum, Urgent Pointer
+    \draw[thick] (7.0, 0.9) -- (7.0, 0);
+    \node at (3.5, 0.45) {\textbf{Checksum (16 bits, Pseudo-Header computed)}};
+    \node at (10.5, 0.45) {\textbf{Urgent Pointer (16 bits)}};
+\end{tikzpicture}
+\caption{Layer 4 TCP Segment Header Format (20 Octets Base)}
+\label{fig:header_tcp}
+\end{figure}
+
+\subsection{TCP Checksum Calculation and Pseudo-Header Construction}
+Under RFC 793, the TCP checksum is not calculated over the TCP segment alone. It covers a 12-byte pseudo-header prepended to the TCP segment to verify that the packet reached its intended destination IP address:
+
+\begin{equation}
+\text{Checksum} = \sim \left( \sum_{i=1}^{N} W_i \pmod{2^{16} - 1} \right)
+\end{equation}
+
+where $W_i$ represents consecutive 16-bit words across the concatenated pseudo-header and TCP segment. The pseudo-header structure is defined in Table~\ref{tab:pseudo_header}:
+
+\begin{table}[ht]
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\caption{IPv4 TCP Pseudo-Header Field Layout for Checksum Calculation}
+\label{tab:pseudo_header}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{2.6cm} >{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Byte Offset} & \textbf{Field Name} & \textbf{Value in SYN Probe} \\
+\midrule
+0--3  & Source IPv4 Address      & Attacker IPv4 (e.g., \texttt{192.168.1.10}) \\
+4--7  & Destination IPv4 Address & Target IPv4 (e.g., \texttt{192.168.1.25}) \\
+8     & Reserved Zero Octet      & \texttt{0x00} \\
+9     & Protocol Identifier      & \texttt{0x06} (TCP Transport Protocol) \\
+10--11& TCP Segment Length       & Length of TCP header + options + payload (e.g., 20) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{OS Fingerprinting Response Feature Matrix}
+The fingerprinting engine parses incoming SYN/ACK frames and extracts four diagnostic attributes to compute OS classification scores:
+
+\begin{table}[ht]
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\caption{TCP/IP Stack Fingerprinting Signatures Extracted from SYN/ACK Packets}
+\label{tab:fingerprint_matrix}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{3.2cm} >{\raggedright\arraybackslash}p{2.2cm} >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X}
+\toprule
+\textbf{Diagnostic Feature} & \textbf{Packet Field} & \textbf{Windows 10/11} & \textbf{Linux 5.x / 6.x} & \textbf{macOS / BSD} \\
+\midrule
+Initial TTL & IPv4 TTL & 128 & 64 & 64 \\
+\rowcolor{lightbg}
+TCP Window Size & TCP Window & 64240 or 65535 & 29200 or 65160 & 65535 \\
+MSS Option & TCP Option 2 & 1460 & 1460 & 1460 \\
+\rowcolor{lightbg}
+Window Scale Option & TCP Option 3 & 8 & 7 & 6 \\
+TCP Timestamp & TCP Option 8 & Often Absent & Typically Present & Present \\
+\rowcolor{lightbg}
+Option Sequence & TCP Options & MSS, NOP, WS, NOP, NOP, SACK & MSS, SACK, TS, NOP, WS & MSS, NOP, WS, NOP, NOP, TS \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ----------------------------------------------------------------------
+% 5. Implementation Plan and Modular Architecture
+% ----------------------------------------------------------------------
+\section{Implementation Plan and Modular Architecture}
+
+\subsection{Modular Repository Architecture}
+The project codebase is organized into four decoupled packages:
+
+\begin{itemize}
+    \item \textbf{\texttt{common/}:} Shared core networking utilities.
+    \begin{itemize}
+        \item \texttt{packet.py}: Implements \texttt{build\_syn\_frame()}, \texttt{parse\_ipv4\_tcp\_frame()}, and the RFC 1071 checksum routine.
+        \item \texttt{npcap.py}: Provides native \texttt{ctypes} wrappers for \texttt{wpcap.dll} functions, including \texttt{pcap\_open}, \texttt{pcap\_sendpacket}, and \texttt{pcap\_next\_ex}.
+    \end{itemize}
+    \item \textbf{\texttt{attacker/}:} Multi-phase attack orchestration suite.
+    \begin{itemize}
+        \item \texttt{main.py}: Master CLI coordinator linking all reconnaissance and exploit phases.
+        \item \texttt{scanner.py}: TCP SYN port scanner implementing the half-open probe loop.
+        \item \texttt{banner.py}: Stream socket connection routines for passive and active banner extraction.
+        \item \texttt{fingerprint.py}: Heuristic scorer comparing SYN/ACK attributes against known signatures.
+        \item \texttt{exploits/}: Dedicated modules for anonymous FTP authentication and HTTP directory path traversal.
+    \end{itemize}
+    \item \textbf{\texttt{victim/}:} Reproducible demonstration targets.
+    \begin{itemize}
+        \item \texttt{ftp\_server.py}: Multithreaded Python FTP server configured to accept anonymous logins.
+        \item \texttt{http\_server.py}: HTTP daemon containing an intentional path traversal flaw.
+    \end{itemize}
+    \item \textbf{\texttt{defense/}:} Countermeasure implementation.
+    \begin{itemize}
+        \item \texttt{detector.py}: In-memory sliding-window packet queue tracking per-IP probe frequency and destination port counts.
+        \item \texttt{main.py}: Automated alert dispatcher executing \texttt{netsh advfirewall} commands to enforce temporary IP blocks.
+    \end{itemize}
+\end{itemize}
+
+% ----------------------------------------------------------------------
+% 6. Justification: Why the Design Will Work
+% ----------------------------------------------------------------------
+\section{Justification and Technical Viability}
+
+The technical approach relies on three standard protocol behaviors:
+\begin{enumerate}[nosep, itemsep=3pt, leftmargin=1.4em]
+    \item \textbf{Deterministic Kernel Responses:} RFC 793 specifies that an operating system must reply with RST for packets to closed ports and SYN/ACK for active listening ports. Because these replies come directly from the kernel network stack, the scanner determines port states without establishing an application session.
+    \item \textbf{Link-Layer Transmission via Npcap:} Standard Windows sockets (\texttt{SOCK\_RAW}) restrict raw TCP packet construction for unprivileged users. Interfacing directly with the Npcap driver via \texttt{ctypes} bypasses transport-layer limits and transmits custom Ethernet frames onto the local wire.
+    \item \textbf{Vendor Divergence in TCP Defaults:} Operating system vendors configure distinct default values for initial TTL, TCP buffer window size, and option negotiation sequences. Windows defaults to an initial TTL of 128, whereas Linux uses 64. Across a local subnet without routing hops, these signatures distinguish the target operating system reliably.
+\end{enumerate}
+
+\subsection{Operational Resilience and Failure Handling}
+Beyond protocol viability, the system handles operational faults through explicit state tracking:
+\begin{itemize}[nosep, itemsep=3pt, leftmargin=1.4em]
+    \item \textbf{Asynchronous Probe Timeouts:} Network operations enforce a 1.5-second per-probe timeout so that dropped or filtered packets do not stall scanner thread execution.
+    \item \textbf{Automated Firewall Rule Cleanup:} Dynamic firewall rules added via \texttt{netsh} are tracked in memory and removed upon exit, preventing persistent network lockouts.
+    \item \textbf{Sandboxed Demonstration Services:} Target services run inside dedicated unprivileged test directories to keep proof-of-concept verification isolated from host files.
+\end{itemize}
+
+% ----------------------------------------------------------------------
+% 7. Expected Outcome of a Successful Attack
+% ----------------------------------------------------------------------
+\section{Expected Outcomes of a Successful Attack}
+
+\subsection{Evaluation Criteria}
+Table~\ref{tab:outcomes} summarizes the target criteria for evaluating each attack phase:
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\caption{Evaluation Metrics and Validation Methods for Attack Phases}
+\label{tab:outcomes}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{2.4cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Phase} & \textbf{Evaluation Target} & \textbf{Success Indicator} & \textbf{Validation Method} \\
+\midrule
+1. Port Scan & Accurate port classification & Port states match host reality (Open, Closed, Filtered). & Compare scanner output with \texttt{netstat -an} on victim host. \\
+\rowcolor{lightbg}
+2. Banners & Software identification & Extracted string contains correct daemon name and version. & Match against service launch configurations and headers. \\
+3. OS Fingerprint & OS family classification & Target identified as Windows with confidence $\ge 80\%$. & Compare against victim system properties (\texttt{winver}). \\
+\rowcolor{lightbg}
+4. Exploits & Access compromise & Unauthorized read/access on target services demonstrated. & Session logs confirm anonymous FTP authentication and HTTP directory path traversal read. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\clearpage
+
+\subsection{Anticipated Execution Telemetry and Verification Output}
+To verify pipeline behavior against its functional design criteria, the anticipated console output of an automated reconnaissance and exploit cycle is shown below. This trace details the data schema, heuristic classifications, and exploit verification results:
+
+\begin{terminalbox}[Attacker Console Output: Benchmark Execution Trace]
+\begin{verbatim}
+=============================================================
+  CUSTOM PORT SCANNER: ATTACK TOOLKIT
+=============================================================
+  Target       : 192.168.0.116
+  Attacker     : 192.168.0.105 (a0:29:42:92:ef:19)
+  Target MAC   : d8:5e:d3:99:09:6c
+  Ports        : [21, 80, 443, 445]
+  Scan delay   : 0.5s
+
+  [PHASE 1] TCP SYN Port Scanning
+  -----------------------------------------------------------
+     21  OPEN                           TTL=128 WIN=65535
+     80  OPEN                           TTL=128 WIN=65535
+    443  NO RESPONSE / POSSIBLY FILTERED
+    445  OPEN                           TTL=128 WIN=65535
+
+  [PHASE 2] Service Banner Grabbing
+  -----------------------------------------------------------
+  [+]  21  FTP   -> LabFTP Server (Vulnerable Demo) Ready
+  [+]  80  HTTP  -> VulnHTTP/1.0 (Lab Demo)
+
+  [PHASE 3] OS Fingerprinting
+  -----------------------------------------------------------
+  Likely OS  : Windows family (Confidence: 89%)
+  Version    : Windows 10/11 family
+  Evidence   : Initial TTL=128, Window=65535, MSS=1460
+
+  [PHASE 5] Targeted Exploit Execution
+  -----------------------------------------------------------
+  [EXPLOIT 1] FTP Anonymous Authentication (Port 21)
+  Status     : SUCCESS (Authenticated as anonymous:guest)
+  Directory  : 257 "/" | Files: drwxr-xr-x 1 ftp ftp 0 pub
+
+  [EXPLOIT 2] HTTP Directory Path Traversal (Port 80)
+  Status     : SUCCESS (Payload: ..\..\..\windows\win.ini)
+  Payloads   : 12 attempted, 8 successful variations
+  Disclosed  : [fonts] Arial=arial.ttf (arbitrary host file read)
+
+=============================================================
+  ATTACK SUMMARY
+=============================================================
+  Ports scanned : 4 | Open: 3 | Filtered: 1
+  Banners found : 2/2 | OS guess: Windows family (89%)
+  Exploits      : 2/2 successful (FTP Anonymous + HTTP Traversal)
+=============================================================
+\end{verbatim}
+\end{terminalbox}
+
+\clearpage
+
+% ----------------------------------------------------------------------
+% 8. Defense Idea: Detection and Dynamic Mitigation
+% ----------------------------------------------------------------------
+\section{Defense Mechanism and Dynamic Countermeasures}
+
+\subsection{Sliding-Window SYN Rate and Diversity Detection}
+Port scanning generates a characteristic footprint: multiple SYN packets directed at different destination ports within a short interval. The defensive detector monitors incoming TCP traffic using a two-part sliding window:
+
+\begin{summarybox}[Detection Algorithm Formulation]
+For each unique source IP $S$, maintain a sliding event queue:
+\begin{equation*}
+Q_S = \{ (t_i, p_i) \mid t_i > t_{\text{current}} - W \}
+\end{equation*}
+where $W$ is the sliding window duration ($W = 10.0\text{ seconds}$). On arrival of any packet with $\text{SYN}=1$ and $\text{ACK}=0$:
+\begin{enumerate}[nosep, leftmargin=1.4em]
+    \item Append $(t_{\text{current}}, p_{\text{dest}})$ to $Q_S$.
+    \item Evict all entries where $t_i \le t_{\text{current}} - W$.
+    \item Compute total events $C = |Q_S|$ and unique ports $U = |\{p_i \mid (\cdot, p_i) \in Q_S\}|$.
+    \item Trigger alert if $C \ge \theta_{\text{count}}$ ($8$) \textbf{and} $U \ge \theta_{\text{ports}}$ ($5$).
+\end{enumerate}
+\end{summarybox}
+
+Checking both packet rate and port diversity prevents false positives from single-port bursts (such as parallel HTTP asset downloads) while catching multi-port scans.
+
+\subsection{Dynamic Host Firewall Mitigation}
+When the monitor triggers an alert and mitigation is enabled, it adds an inbound blocking rule through the Windows Advanced Firewall:
+
+\begin{terminalbox}[Windows Advanced Firewall Dynamic Block Rule Command]
+\begin{verbatim}
+netsh advfirewall firewall add rule name="CustomPortScanBlock_192_168_1_10" ^
+    dir=in action=block remoteip=192.168.1.10 protocol=TCP profile=any
+\end{verbatim}
+\end{terminalbox}
+
+The defense process records active rules in memory and removes them upon exit to prevent persistent network misconfiguration.
+
+\subsection{Security Analysis and Limitations}
+\begin{itemize}[nosep, itemsep=2pt, leftmargin=1.4em]
+    \item \textbf{False-Positive Suppression:} Requiring destination port diversity distinguishes scans from high-throughput single-port traffic, such as web browsing or database connection pools.
+    \item \textbf{Sub-Second Mitigation:} Rule generation via \texttt{netsh} applies within milliseconds of crossing the detection threshold.
+    \item \textbf{Known Limitations:} Slow scans with probe intervals longer than the 10-second window will evade detection. Attackers could also bypass the single-IP filter by distributing probes across multiple addresses.
+\end{itemize}
+
+% ----------------------------------------------------------------------
+% References
+% ----------------------------------------------------------------------
+\begin{thebibliography}{99}
+\footnotesize
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+
+\bibitem{rfc793}
+Postel, J., ``Transmission Control Protocol,'' \textit{RFC 793}, Defense Advanced Research Projects Agency, 1981.
+
+\bibitem{rfc791}
+Postel, J., ``Internet Protocol,'' \textit{RFC 791}, Defense Advanced Research Projects Agency, 1981.
+
+\bibitem{rfc1071}
+Braden, R., Borman, D., and Partridge, C., ``Computing the Internet Checksum,'' \textit{RFC 1071}, 1988.
+
+\bibitem{fyodor1998}
+Fyodor (Lyon, G.), ``Remote OS Detection via TCP/IP Stack Fingerprinting,'' \textit{Phrack Magazine}, vol.~8, no.~54, 1998.
+
+\bibitem{mitre1046}
+MITRE ATT\&CK, ``Network Service Scanning (T1046),'' \textit{MITRE Corporation}, 2023. \url{https://attack.mitre.org/techniques/T1046/}.
+
+\bibitem{cve202141773}
+National Vulnerability Database, ``CVE-2021-41773: Apache HTTP Server Path Traversal Vulnerability,'' \textit{NIST}, 2021. \url{https://nvd.nist.gov/vuln/detail/CVE-2021-41773}.
+
+\bibitem{npcapguide}
+Nmap Project, ``Npcap: Windows Packet Capture Library \& Driver,'' \textit{Npcap Reference Documentation}, 2024. \url{https://npcap.com/}.
+
+\end{thebibliography}
+
+\end{document}
