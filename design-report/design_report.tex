@@ -103,17 +103,17 @@
 \titleformat{\section}
   {\color{primary}\normalfont\Large\bfseries\sffamily}
   {\thesection}{1em}{}[\color{primary}\titlerule]
-\titlespacing*{\section}{0pt}{14pt plus 2pt minus 2pt}{6pt plus 1pt minus 1pt}
+\titlespacing*{\section}{0pt}{11pt plus 2pt minus 2pt}{5pt plus 1pt minus 1pt}
 
 \titleformat{\subsection}
   {\color{secondary}\normalfont\large\bfseries\sffamily}
   {\thesubsection}{0.8em}{}
-\titlespacing*{\subsection}{0pt}{11pt plus 2pt minus 1pt}{4pt plus 1pt minus 1pt}
+\titlespacing*{\subsection}{0pt}{8pt plus 2pt minus 1pt}{3pt plus 1pt minus 1pt}
 
 \titleformat{\subsubsection}
   {\color{darkslate}\normalfont\normalsize\bfseries\sffamily}
   {\thesubsubsection}{0.6em}{}
-\titlespacing*{\subsubsection}{0pt}{8pt plus 1pt minus 1pt}{3pt plus 1pt minus 1pt}
+\titlespacing*{\subsubsection}{0pt}{6pt plus 1pt minus 1pt}{2.5pt plus 1pt minus 1pt}
 
 % ----------------------------------------------------------------------
 % Headers and Footers (fancyhdr)
@@ -122,7 +122,7 @@
 \pagestyle{fancy}
 \setlength{\headheight}{14.5pt}
 \fancyhf{}
-\fancyhead[L]{\small\textbf{\color{primary}PortScan-OS} \ --- \ {\color{secondary}Project Design Report}}
+\fancyhead[L]{\small\textbf{\color{primary}PortScan-OS} \ $\cdot$ \ {\color{secondary}Project Design Report}}
 \fancyhead[R]{\small\color{darkslate!80}CSE 406 $\cdot$ 2105032 $\cdot$ 2105033}
 \fancyfoot[L]{\small\color{darkslate!75}Port Scanning with OS Detection and Exploitation}
 \fancyfoot[R]{\small\bfseries\color{primary}Page \thepage}
@@ -226,34 +226,47 @@ The project organizes its workflow into five attack phases alongside a concurren
 
 \begin{table}[H]
 \centering
-\small
-\renewcommand{\arraystretch}{1.08}
+\footnotesize
+\renewcommand{\arraystretch}{1.0}
 \caption{Five-Phase Reconnaissance and Attack Architecture}
 \label{tab:phases}
-\begin{tabularx}{\textwidth}{>{\centering\arraybackslash\bfseries}p{1.4cm} >{\raggedright\arraybackslash\bfseries}p{3.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{>{\centering\arraybackslash\bfseries}p{1.2cm} >{\raggedright\arraybackslash\bfseries}p{2.7cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X}
 \toprule
 \textbf{Phase} & \textbf{Designation} & \textbf{Operational Focus} & \textbf{Engineering Mechanism} \\
 \midrule
 1 & TCP SYN Port Scan & Detect Open, Closed, and Filtered ports & Raw Layer-2 frame construction via Npcap; half-open scan without completing the 3-way handshake. \\
 \rowcolor{lightbg}
 2 & Banner Grabbing & Service and version identification & Standard stream sockets querying listening daemons (passive capture for FTP, active HTTP probes). \\
-3 & OS Fingerprinting & Identify target host operating system & Heuristic analysis of SYN/ACK response headers: initial TTL, window size, MSS, and TCP option sequences. \\
+3 & OS Fingerprinting & Identify target host operating system & Dual-candidate heuristic scoring of SYN/ACK and RST headers: TTL, window size, RFC 6864 IP ID, and option ordering. \\
 \rowcolor{lightbg}
 4 & Vulnerability Match & Map findings to attack surfaces & Automated mapping between extracted daemon versions and known proof-of-concept exploit vectors. \\
 5 & Exploit Execution & Demonstrate concrete security compromise & Automated dispatch of anonymous FTP authentication and HTTP directory path traversal payloads. \\
 \midrule
-\textbf{Defense} & \textbf{Scan Detection \& Block} & Passive detection and dynamic mitigation & Sliding-window inspection tracking SYN packet rates and destination port diversity with dynamic Windows Firewall rule generation. \\
+\textbf{Defense} & \textbf{Scan Detection \& Block} & Passive detection and dynamic mitigation & Sliding-window inspection tracking SYN packet rates and port diversity with dynamic Windows Firewall mitigation. \\
 \bottomrule
 \end{tabularx}
 \end{table}
+\vspace{-4pt}
 
 \subsection{Core Design Principles}
-\begin{itemize}[nosep, leftmargin=1.5em]
-    \item \textbf{From-Scratch Packet Construction:} All Ethernet frames, IPv4 packets, and TCP segments are assembled byte by byte in binary format. The implementation avoids high-level network construction abstractions.
-    \item \textbf{Direct Checksum Computation:} Checksum fields for both IPv4 headers and TCP segments (with their accompanying pseudo-headers) are computed via a custom 16-bit one's complement Internet checksum implementation following RFC 1071.
-    \item \textbf{Npcap as Hardware Interface:} The toolkit uses Npcap strictly as a low-level packet I/O driver on Windows via Python \texttt{ctypes}. All probe dispatching, frame sequencing, and response interpretation run in custom application code.
-    \item \textbf{Strict Safety Boundaries:} The toolkit restricts scanning to private IPv4 address spaces (RFC 1918), caps targets at 50 ports per run, and enforces an inter-probe delay of at least 0.2 seconds to prevent denial of service conditions.
+The attack and defense modules adhere to four core architectural constraints:
+\begin{itemize}[nosep, itemsep=1pt, leftmargin=1.5em]
+    \item \textbf{From-Scratch Packet Assembly:} Serializes raw Ethernet II, IPv4, and TCP headers byte by byte in binary format without high-level packet construction libraries.
+    \item \textbf{RFC 1071 Checksum Computation:} Computes 16-bit one's complement checksums over IPv4 headers and TCP pseudo-headers using a custom mathematical routine.
+    \item \textbf{Npcap Low-Level Driver Interface:} Uses Npcap via Python \texttt{ctypes} strictly for link-layer frame transmission and promiscuous capture on Windows.
+    \item \textbf{Integrated Host Defense:} Pairs offensive reconnaissance with a concurrent monitor that detects active scanning and dynamically injects firewall quarantine rules.
 \end{itemize}
+\vspace{-2pt}
+
+\subsection{Safety Architecture and Operational Safeguards}
+To maintain ethical standards and prevent disruption in laboratory networks, the toolkit enforces five non-bypassable safeguards:
+\begin{enumerate}[nosep, itemsep=1pt, leftmargin=1.5em]
+    \item \textbf{RFC 1918 Scope Validation:} Targets must belong to RFC~1918 private subnets (\texttt{10.0.0.0/8}, \texttt{172.16.0.0/12}, \texttt{192.168.0.0/16}); external destinations are rejected immediately.
+    \item \textbf{Bounded Probe Horizon:} Caps probe lists at 50 ports per run ($\text{MAX\_PROBES} = 50$), prohibiting full 65,535-port scans and subnet sweeps.
+    \item \textbf{Mandatory Rate Limiting:} Enforces an inter-packet delay $\ge 0.2$\,s (default: 0.5\,s) to avoid buffer saturation or switch broadcast storms.
+    \item \textbf{Source Port and Sequence Randomization:} Rotates ephemeral source ports with randomized initial sequence numbers to prevent state collision.
+    \item \textbf{Non-Destructive Read-Only Exploits:} Restricts exploit modules to read-only checks (FTP \texttt{PWD}/\texttt{LIST} and HTTP static file traversal).
+\end{enumerate}
 
 \clearpage
 
@@ -263,7 +276,30 @@ The project organizes its workflow into five attack phases alongside a concurren
 \section{Network Topology and System Components}
 
 \subsection{Laboratory Network Architecture}
-The experimental testbed operates within an isolated private local subnet (such as \texttt{192.168.1.0/24} on a dedicated physical switch or a host-only virtualized hypervisor segment). Both nodes share the same Layer-2 broadcast domain because the custom scanner crafts raw Ethernet frames and performs Address Resolution Protocol (ARP) queries directly to obtain target MAC addresses.
+The experimental testbed operates within an isolated private local subnet (\texttt{192.168.0.0/24}) on a dedicated physical switch. All nodes share the same Layer-2 broadcast domain because the custom scanner crafts raw Ethernet frames and issues direct Address Resolution Protocol (ARP) queries to resolve target hardware addresses.
+
+To evaluate OS fingerprinting across diverse TCP/IP implementations, the testbed incorporates four physical target platforms representing major operating system families, as detailed in Table~\ref{tab:testbed_devices}.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.18}
+\caption{Heterogeneous Target Device Specifications in the Laboratory Testbed}
+\label{tab:testbed_devices}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{2.6cm} >{\raggedright\arraybackslash}p{3.1cm} >{\centering\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Device Role} & \textbf{Operating System Stack} & \textbf{Assigned IPv4} & \textbf{Active Services \& Verification Role} \\
+\midrule
+Attacker Station & Windows 11 Pro (x86\_64) & \texttt{192.168.0.105} & Toolkit orchestrator, raw Npcap packet injection, and capture monitoring. \\
+\rowcolor{lightbg}
+Primary Victim & Windows 11 Pro (Build 22631) & \texttt{192.168.0.116} & Vulnerable FTP (:21), HTTP (:80), and dynamic Windows Firewall quarantine agent. \\
+Secondary Victim & Apple iPadOS 17 (Darwin BSD) & \texttt{192.168.0.152} & VLC HTTP Sharing (:80); evaluates Darwin option sequence ($\text{WS} < \text{TS}$) and initial TTL 64. \\
+\rowcolor{lightbg}
+Mobile Target & Android 14 (Linux Kernel 5.x) & \texttt{192.168.0.169} & WiFi FTP Server (:2221); evaluates Linux option layout, RFC 6864 $\text{IP ID} = 0$, and closed RST. \\
+Network Appliance & Embedded Linux (Gateway Router) & \texttt{192.168.0.1} & DNS (:53) and HTTP Gateway (:80); evaluates embedded appliance TTL and window defaults. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -276,7 +312,7 @@ The experimental testbed operates within an isolated private local subnet (such 
     % Left Card: Attacker Machine
     % ------------------------------------------------------------------
     \node[draw=primary, thick, fill=primary, text=white, rounded corners=3pt, minimum width=5.2cm, minimum height=0.75cm, font=\sffamily\bfseries\small] (atk_hdr) at (0, 2.1) {Attacker Workstation (Windows)};
-    \node[draw=primary!30, fill=primary!8, font=\sffamily\scriptsize, text width=5.0cm, align=center, inner sep=2.5pt] (atk_sub) at (0, 1.45) {\textbf{IP:} 192.168.1.10 \ \ $\vert$ \ \ \textbf{MAC:} 00:0C:29:11:22:33};
+    \node[draw=primary!30, fill=primary!8, font=\sffamily\scriptsize, text width=5.0cm, align=center, inner sep=2.5pt] (atk_sub) at (0, 1.45) {\textbf{IP:} 192.168.0.105 \ \ $\vert$ \ \ \textbf{MAC:} A0:29:42:92:EF:19};
     \node[draw=primary!40, fill=lightbg, font=\sffamily\scriptsize, text width=5.0cm, align=flush left, inner sep=6pt, rounded corners=2pt] (atk_body) at (0, -0.3) {
         \textbf{\color{primary}Custom Attack Toolkit:}\\[2pt]
         $\bullet$ Raw SYN Packet Builder (\texttt{packet.py})\\
@@ -292,7 +328,7 @@ The experimental testbed operates within an isolated private local subnet (such 
     % ------------------------------------------------------------------
     \node[draw=secondary, very thick, fill=secondary!12, rounded corners=4pt, text width=3.4cm, align=center, inner sep=8pt] (switch) at (7.4, 0.4) {
         \textbf{\color{primary}\large Layer-2 Switch}\\[3pt]
-        {\scriptsize Subnet: 192.168.1.0/24\\[1pt]
+        {\scriptsize Subnet: 192.168.0.0/24\\[1pt]
         Ethernet Broadcast Domain\\[1pt]
         Port Mirror / Sniffer Tap}
     };
@@ -301,7 +337,7 @@ The experimental testbed operates within an isolated private local subnet (such 
     % Right Card: Victim Machine
     % ------------------------------------------------------------------
     \node[draw=alertred, thick, fill=alertred, text=white, rounded corners=3pt, minimum width=5.2cm, minimum height=0.75cm, font=\sffamily\bfseries\small] (vic_hdr) at (14.8, 2.1) {Target Host (Victim Machine)};
-    \node[draw=alertred!30, fill=alertred!8, font=\sffamily\scriptsize, text width=5.0cm, align=center, inner sep=2.5pt] (vic_sub) at (14.8, 1.45) {\textbf{IP:} 192.168.1.25 \ \ $\vert$ \ \ \textbf{MAC:} 00:0C:29:AA:BB:CC};
+    \node[draw=alertred!30, fill=alertred!8, font=\sffamily\scriptsize, text width=5.0cm, align=center, inner sep=2.5pt] (vic_sub) at (14.8, 1.45) {\textbf{IP:} 192.168.0.116 \ \ $\vert$ \ \ \textbf{MAC:} D8:5E:D3:99:09:6C};
     \node[draw=alertred!40, fill=alertred!5, font=\sffamily\scriptsize, text width=5.0cm, align=flush left, inner sep=6pt, rounded corners=2pt] (vic_body) at (14.8, -0.3) {
         \textbf{\color{alertred}Target Services \& Daemons:}\\[2pt]
         $\bullet$ Port 21: Vulnerable FTP (Anonymous)\\
@@ -372,6 +408,15 @@ Firewall Agent & Victim & Windows \texttt{netsh} & Injects dynamic inbound block
 \end{tabularx}
 \end{table}
 
+\subsection{Link-Layer Hardware Address Resolution Architecture}
+Constructing raw Layer-2 Ethernet II frames requires both the source MAC address of the local network interface and the destination MAC address of the target host. Because standard Python socket libraries on Windows do not expose link-layer address tables directly, the system queries the Windows IP Helper library (\texttt{iphlpapi.dll}) through \texttt{ctypes}:
+
+\begin{enumerate}[nosep, leftmargin=1.5em]
+    \item \textbf{Local Interface and Source MAC Discovery:} The scanner identifies the active network interface by opening an ephemeral UDP probe to the target subnet and reading the bound local IP address. It then calls \texttt{GetAdaptersInfo()} to extract the 6-octet hardware address of that interface.
+    \item \textbf{Pre-Flight Target ARP Resolution:} Before probe dispatch, the toolkit issues an ARP request using \texttt{SendARP(dst\_ip, src\_ip, pMac, \&len)}. This populates the local ARP cache and retrieves the target MAC address over the local broadcast segment.
+\end{enumerate}
+This design allows the Layer-2 frame construction pipeline (\texttt{build\_ethernet()}) to operate without hardcoded hardware addresses.
+
 \clearpage
 
 % ----------------------------------------------------------------------
@@ -382,7 +427,17 @@ Firewall Agent & Victim & Windows \texttt{netsh} & Injects dynamic inbound block
 \subsection{Original Protocol vs. SYN Port Scan Mechanics}
 Standard TCP (RFC 793) connections complete a full three-way handshake: SYN $\to$ SYN/ACK $\to$ ACK. Application listeners accept and log the connection only after the final ACK arrives.
 
-In contrast, our TCP SYN scanner performs a half-open scan. It sends a single SYN probe and inspects the reply. If the port is open, the target returns a SYN/ACK. The scanner records the open state and withholds the final ACK, leaving the connection unestablished and typically unlogged by user-space applications. If the port is closed, the target kernel returns a RST packet. If a firewall drops the probe, no packet arrives before the 1.5-second timeout expires.
+In contrast, our TCP SYN scanner performs a half-open scan. It sends a single SYN probe and inspects the reply. When a port is open, the target returns a SYN/ACK. The scanner records the open state and withholds the final ACK, leaving the connection unestablished and unlogged by application listeners. When a port is closed, the target kernel returns a RST packet. If a firewall drops the probe, the scanner waits until the 1.5-second timeout expires.
+
+\subsubsection{Dual-Candidate Ingestion Flow: Closed-Port RST Fallback Pipeline}
+Passive fingerprinters typically depend on capturing an open-port SYN/ACK frame. When all probed ports on a target are closed, conventional tools fail to classify the operating system.
+
+Our design addresses this with a dual-candidate telemetry pipeline:
+\begin{itemize}[nosep, leftmargin=1.4em]
+    \item \textbf{Primary Candidate (Open Port SYN/ACK):} When a probed port responds with $\text{SYN}=1$ and $\text{ACK}=1$, the frame is selected as the primary fingerprint candidate to examine negotiated options, window scale factors, and timestamp fields.
+    \item \textbf{Fallback Candidate (Closed Port RST):} When a probed port responds with $\text{RST}=1$, the scanner extracts the IPv4 TTL, TCP Window Size, and RFC 6864 IP ID. If no open port is found across all probes, the classifier uses the RST packet as fallback telemetry.
+\end{itemize}
+An inbound RST frame with $\text{Initial TTL} = 128$ and $\text{Window} = 0$ indicates a Microsoft Windows stack, while an RST with $\text{Initial TTL} = 64$ and $\text{IP ID} = 0$ indicates a Linux kernel. This allows the scanner to identify the operating system family even when every probed port is closed.
 
 \begin{figure}[ht]
 \centering
@@ -441,7 +496,7 @@ In contrast, our TCP SYN scanner performs a half-open scan. It sends a single SY
     \draw[-{Stealth[length=5pt]}, thick, color=darkslate] (0, -0.6) -- node[above, sloped, font=\scriptsize] {Raw SYN ($dst\_port = 443$)} (4.2, -1.2);
     \draw[-{Stealth[length=5pt]}, thick, color=alertred] (4.2, -1.6) -- node[above, sloped, font=\scriptsize] {RST ($flags = \text{0x04}$)} (0, -2.2);
     
-    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\scriptsize\bfseries, align=center, text=alertred] at (2.1, -3.0) {Port State: \textbf{CLOSED} (Kernel Discard)};
+    \node[draw=alertred, fill=alertred!10, rounded corners=2pt, font=\scriptsize\bfseries, align=center, text=alertred] at (2.1, -3.0) {Port State: \textbf{CLOSED} (RST Ingested)};
 \end{tikzpicture}
 \end{minipage}%
 \hfill
@@ -652,7 +707,7 @@ Figure~\ref{fig:timing_defense} shows the defense monitor timeline. Incoming SYN
     \draw[-{Stealth[length=5pt]}, thick, color=alertred] (9.6, -0.55) -- (9.6, -1.05);
     \node[draw=secondary, fill=secondary!15, rounded corners=3pt, font=\scriptsize, align=center] at (9.6, -1.5) {
         \textbf{\color{primary}Dynamic Firewall Rule Injected via \texttt{netsh}}\\
-        \texttt{\footnotesize netsh advfirewall add rule dir=in action=block remoteip=192.168.1.10}
+        \texttt{\footnotesize netsh advfirewall add rule dir=in action=block remoteip=192.168.0.105}
     };
 
     % ------------------------------------------------------------------
@@ -672,8 +727,6 @@ Figure~\ref{fig:timing_defense} shows the defense monitor timeline. Incoming SYN
 \caption{Timeline of Sliding-Window Scan Detection and Dynamic Firewall Rule Injection}
 \label{fig:timing_defense}
 \end{figure}
-
-\clearpage
 
 % ----------------------------------------------------------------------
 % 4. Packet and Frame Structure
@@ -749,8 +802,31 @@ The IPv4 packet is constructed strictly according to RFC 791. Standard probes us
 \label{fig:header_ipv4}
 \end{figure}
 
-\subsection{Layer 4: TCP Segment Header}
-The TCP header is serialized per RFC 793 with control flags explicitly set for the SYN half-open probe ($Flags = \text{0x02}$):
+\subsection{Layer 4: TCP Segment Header and Active Option Offering}
+The TCP header is serialized per RFC 793 with control flags explicitly set for the SYN half-open probe ($Flags = \text{0x02}$). While a minimal TCP header spans 20 octets ($\text{Data Offset} = 5$), standard probes in our proposed toolkit are structured as 40-octet frames ($\text{Data Offset} = 10$) incorporating 20 octets of diagnostic TCP options (\texttt{STANDARD\_SYN\_OPTIONS}):
+\begin{itemize}[nosep, leftmargin=1.5em]
+    \item \textbf{Maximum Segment Size (MSS):} Option Kind 2, Length 4, Value $1460$ (\texttt{0x02 0x04 0x05 0xb4}).
+    \item \textbf{SACK Permitted:} Option Kind 4, Length 2 (\texttt{0x04 0x02}), advertising RFC~2018 selective acknowledgment support.
+    \item \textbf{TCP Timestamp:} Option Kind 8, Length 10 (\texttt{0x08 0x0a ...}), advertising RFC~7323 timestamp capabilities.
+    \item \textbf{Window Scale:} Option Kind 3, Length 3, Shift count $8$ (\texttt{0x03 0x03 0x08}), padded with a NOP (\texttt{0x01}) for 32-bit boundary alignment.
+\end{itemize}
+Offering these options prompts the target host to negotiate and reveal its native TCP option order, window scale factor, and timestamp support in the SYN/ACK reply.
+
+\subsubsection{Active Stimulus-Response TCP Option Formulation}
+Under RFC 7323 (TCP High Performance Extensions) and RFC 2018 (Selective Acknowledgment), advanced TCP capabilities require mutual negotiation during the initial handshake. If a scanner sends a bare 20-byte TCP SYN header without options, target operating systems omit Window Scale, SACK-Permitted, and Timestamp fields in their SYN/ACK replies.
+
+Our probe design addresses this by including an active option stimulus in every outgoing SYN packet:
+\begin{equation}
+\text{SYN}_{\text{options}} = \langle \text{MSS}(1460), \ \text{SACK\_PERMITTED}, \ \text{TIMESTAMP}(t_0, 0), \ \text{NOP}, \ \text{WSCALE}(8) \rangle
+\end{equation}
+Offering these capabilities prompts the target kernel to return its full set of negotiated parameters:
+\begin{itemize}[nosep, leftmargin=1.4em]
+    \item The compile-time \textbf{option sequence order}, which varies by vendor (for example, Apple Darwin stacks place Window Scale before Timestamp, while Linux stacks place SACK-Permitted before Timestamp).
+    \item The native \textbf{Window Scale factor} ($S \in \{5, 6, 7, 8\}$).
+    \item Adherence to RFC 6864, which determines whether the target clears the IPv4 Identification field on atomic datagrams.
+\end{itemize}
+
+The base 20-octet header structure is shown in Figure~\ref{fig:header_tcp}:
 
 \begin{figure}[ht]
 \centering
@@ -814,8 +890,8 @@ where $W_i$ represents consecutive 16-bit words across the concatenated pseudo-h
 \toprule
 \textbf{Byte Offset} & \textbf{Field Name} & \textbf{Value in SYN Probe} \\
 \midrule
-0--3  & Source IPv4 Address      & Attacker IPv4 (e.g., \texttt{192.168.1.10}) \\
-4--7  & Destination IPv4 Address & Target IPv4 (e.g., \texttt{192.168.1.25}) \\
+0--3  & Source IPv4 Address      & Attacker IPv4 (e.g., \texttt{192.168.0.105}) \\
+4--7  & Destination IPv4 Address & Target IPv4 (e.g., \texttt{192.168.0.116}) \\
 8     & Reserved Zero Octet      & \texttt{0x00} \\
 9     & Protocol Identifier      & \texttt{0x06} (TCP Transport Protocol) \\
 10--11& TCP Segment Length       & Length of TCP header + options + payload (e.g., 20) \\
@@ -823,31 +899,67 @@ where $W_i$ represents consecutive 16-bit words across the concatenated pseudo-h
 \end{tabularx}
 \end{table}
 
-\subsection{OS Fingerprinting Response Feature Matrix}
-The fingerprinting engine parses incoming SYN/ACK frames and extracts four diagnostic attributes to compute OS classification scores:
+\subsection{OS Fingerprinting Diagnostic Signature Matrix}
+The fingerprinting engine parses incoming response frames (open-port SYN/ACKs or closed-port RSTs) and extracts diagnostic attributes across Layer~3 and Layer~4 headers. Table~\ref{tab:fingerprint_matrix} defines the baseline signature matrix across target operating system families:
 
 \begin{table}[ht]
 \centering
-\small
-\renewcommand{\arraystretch}{1.25}
-\caption{TCP/IP Stack Fingerprinting Signatures Extracted from SYN/ACK Packets}
+\footnotesize
+\renewcommand{\arraystretch}{1.22}
+\caption{TCP/IP Stack Fingerprinting Signatures across Operating System Families}
 \label{tab:fingerprint_matrix}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{3.2cm} >{\raggedright\arraybackslash}p{2.2cm} >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash\bfseries}p{3.0cm} >{\raggedright\arraybackslash}p{2.2cm} >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X}
 \toprule
-\textbf{Diagnostic Feature} & \textbf{Packet Field} & \textbf{Windows 10/11} & \textbf{Linux 5.x / 6.x} & \textbf{macOS / BSD} \\
+\textbf{Diagnostic Feature} & \textbf{Protocol Field} & \textbf{Windows 10/11} & \textbf{Linux Modern} & \textbf{macOS / Modern BSD} & \textbf{Network Device} \\
 \midrule
-Initial TTL & IPv4 TTL & 128 & 64 & 64 \\
+Initial TTL (SYN/ACK) & IPv4 TTL & 128 & 64 & 64 & 255 \\
 \rowcolor{lightbg}
-TCP Window Size & TCP Window & 64240 or 65535 & 29200 or 65160 & 65535 \\
-MSS Option & TCP Option 2 & 1460 & 1460 & 1460 \\
+Don't Fragment (DF) & IPv4 Flags & Set & Set & Set & Often Clear \\
+IPv4 ID (RFC 6864) & IPv4 ID & Non-Zero / Random & Strictly 0 (with DF) & Non-Zero / Sequential & Sequential \\
 \rowcolor{lightbg}
-Window Scale Option & TCP Option 3 & 8 & 7 & 6 \\
-TCP Timestamp & TCP Option 8 & Often Absent & Typically Present & Present \\
+Advertised Window & TCP Window & 64240, 65535, 8192 & 29200, 65160, 14600 & 65535, 33304 & 4128, 8192 \\
+Window Scale Factor & TCP Option 3 & 8 & 7 or 8 & 5 or 6 & 0 or 2 \\
 \rowcolor{lightbg}
-Option Sequence & TCP Options & MSS, NOP, WS, NOP, NOP, SACK & MSS, SACK, TS, NOP, WS & MSS, NOP, WS, NOP, NOP, TS \\
+TCP Timestamp & TCP Option 8 & Often Absent & Present & Present & Typically Absent \\
+Option Sequence & TCP Options & M, W, S, T or M, W, S & M, S, T, W (SACK $<$ TS) & M, W, T, S (WS $<$ TS) & MSS Only / None \\
+\rowcolor{lightbg}
+Closed-Port RST TTL & IPv4 TTL (RST) & 128 & 64 & 64 & 255 \\
+Closed-Port Window & TCP Window (RST) & 0 & 0 & 0 & 0 \\
+\rowcolor{lightbg}
+Closed-Port RST IP ID & IPv4 ID (RST) & Non-Zero & 0 (with DF set) & Non-Zero / DF Clear & Non-Zero \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\subsection{Mathematical Formulation of Probabilistic OS Scoring and Version Tiering}
+Passive operating system detection cannot rely on simple exact matches, because middleboxes and overlapping TCP window configurations often obscure single fields. The proposed engine formulates OS identification as a weighted evidence score across four classes: $\mathcal{C} = \{\text{Windows}, \text{Linux}, \text{macOS / BSD}, \text{Network device}\}$.
+
+\subsubsection{Evidence-Based Scoring Model}
+For an extracted feature set $F = \{\text{TTL}_{\text{obs}}, W_{\text{obs}}, \text{DF}, \text{ID}_{\text{obs}}, \text{Options}_{\text{order}}, \text{IsRST}\}$, the score $S_c$ for each class $c \in \mathcal{C}$ is computed as:
+\begin{equation}
+S_c = \sum_{k} w_{k,c} \cdot \phi_k(F, c)
+\end{equation}
+where $\phi_k(F, c) \in \{0, 1\}$ indicates whether observed feature $k$ satisfies the signature predicate for class $c$, and $w_{k,c} > 0$ represents diagnostic confidence weightings:
+\begin{itemize}[nosep, leftmargin=1.4em]
+    \item \textbf{Normalized Initial TTL ($w = +4.0$):} Observed TTL $T_{\text{obs}}$ is normalized to standard boundary $T_{\text{norm}} \in \{32, 64, 128, 255\}$ via $T_{\text{norm}} = \min \{t \in \{32, 64, 128, 255\} \mid t \ge T_{\text{obs}}\}$. Estimated router hops are $H = T_{\text{norm}} - T_{\text{obs}}$.
+    \item \textbf{TCP Option Sequence Order ($w = +3.0$):} Option sequence order separates Linux from Darwin directly: Linux kernels place SACK-Permitted before Timestamp ($\langle\text{MSS}, \text{SACK}, \text{TS}, \text{WS}\rangle$), whereas Apple Darwin and BSD stacks place Window Scale before Timestamp ($\langle\text{MSS}, \text{WS}, \text{TS}, \text{SACK}\rangle$).
+    \item \textbf{RFC 6864 IPv4 Identification ($w = +1.5$ / $+0.8$):} When DF is asserted, $\text{ID}_{\text{obs}} = 0$ provides $+1.5$ weight to Linux; non-zero ID awards $+0.8$ to Windows and $+0.4$ to macOS/BSD.
+    \item \textbf{Closed-Port RST Ingestion ($w = +4.5$):} When zero ports are open, a returned RST with $T_{\text{norm}} = 128$ and $W_{\text{obs}} = 0$ awards $+4.5$ to Windows; $T_{\text{norm}} = 64$ awards $+3.0$ to Linux/BSD.
+    \item \textbf{Advertised Window and Window Scale ($w = +1.5$ / $+1.0$):} Evaluates advertised window buffer presets and scale shift exponents against known vendor defaults.
+\end{itemize}
+
+The cumulative raw scores are normalized into a ranked probability distribution vector $\mathbf{P}$:
+\begin{equation}
+P(c) = \frac{\max(0, S_c)}{\sum_{j \in \mathcal{C}} \max(0, S_j)} \times 100\%, \quad \forall c \in \mathcal{C}
+\end{equation}
+
+\subsubsection{Hierarchical Version Tiering Model}
+Because releases within the same operating system family share identical stack parameters, the design classifies targets into coarse family tiers using secondary feature checks:
+\begin{itemize}[nosep, leftmargin=1.4em]
+    \item \textbf{Windows Tiers:} Evaluates initial TTL 32 vs 128, timestamp absence, and legacy buffer sizes (8192 vs 65535) to discriminate between \textit{Windows 10 / 11 / Server 2016+}, \textit{Windows 7 / 8 / Vista}, and \textit{Legacy Windows 9x / 2000}.
+    \item \textbf{Linux Tiers:} Differentiates \textit{Linux modern kernel (3.x / 4.x / 5.x+)} from \textit{Linux legacy (2.4 / 2.6)} based on RFC~6864 IP ID zeroing and modern window scaling presets.
+    \item \textbf{macOS / BSD Tiers:} Classifies into \textit{macOS / modern BSD} (evaluating Darwin option ordering and window scale 5--6) versus \textit{Legacy BSD / NetBSD}.
+\end{itemize}
 
 % ----------------------------------------------------------------------
 % 5. Implementation Plan and Modular Architecture
@@ -883,16 +995,36 @@ The project codebase is organized into four decoupled packages:
     \end{itemize}
 \end{itemize}
 
+\subsection{Automated Verification and Unit Testing Framework}
+To verify packet construction and scoring algorithms before physical network testing, the implementation plan includes an automated unit test suite built with \texttt{pytest}. The suite provides test coverage across two dedicated modules:
+
+\begin{itemize}[nosep, itemsep=2pt, leftmargin=1.5em]
+    \item \texttt{tests/test\_packet.py}:
+    \begin{itemize}
+        \item \textbf{RFC 1071 Checksum Verification:} Validates 16-bit one's complement addition over odd-length and even-length buffers against standard test vectors.
+        \item \textbf{Binary Framing Roundtrip:} Confirms that serialized Ethernet, IPv4, and TCP frames unpack into their original field values without distortion.
+        \item \textbf{TCP Option Parsing:} Tests parsing of option streams containing MSS, Window Scale, SACK-Permitted, and Timestamp fields with variable NOP padding.
+    \end{itemize}
+    \item \texttt{tests/test\_fingerprint.py}:
+    \begin{itemize}
+        \item \textbf{TTL Normalization and Hop Estimation:} Verifies rounding to standard boundaries (32, 64, 128, 255) across simulated network hops.
+        \item \textbf{RFC 6864 IP ID Evaluation:} Confirms that datagrams with $\text{DF}=1$ and $\text{IP ID}=0$ correctly increase the Linux classification score.
+        \item \textbf{Closed-Port RST Classification:} Tests that zero-window RST responses classify Windows targets accurately when no open ports exist.
+        \item \textbf{Version Tiering Logic:} Verifies hierarchical scoring between legacy and modern Windows and Linux releases.
+    \end{itemize}
+\end{itemize}
+
 % ----------------------------------------------------------------------
 % 6. Justification: Why the Design Will Work
 % ----------------------------------------------------------------------
 \section{Justification and Technical Viability}
 
-The technical approach relies on three standard protocol behaviors:
+The technical approach relies on four standard protocol behaviors:
 \begin{enumerate}[nosep, itemsep=3pt, leftmargin=1.4em]
-    \item \textbf{Deterministic Kernel Responses:} RFC 793 specifies that an operating system must reply with RST for packets to closed ports and SYN/ACK for active listening ports. Because these replies come directly from the kernel network stack, the scanner determines port states without establishing an application session.
-    \item \textbf{Link-Layer Transmission via Npcap:} Standard Windows sockets (\texttt{SOCK\_RAW}) restrict raw TCP packet construction for unprivileged users. Interfacing directly with the Npcap driver via \texttt{ctypes} bypasses transport-layer limits and transmits custom Ethernet frames onto the local wire.
-    \item \textbf{Vendor Divergence in TCP Defaults:} Operating system vendors configure distinct default values for initial TTL, TCP buffer window size, and option negotiation sequences. Windows defaults to an initial TTL of 128, whereas Linux uses 64. Across a local subnet without routing hops, these signatures distinguish the target operating system reliably.
+    \item \textbf{Deterministic Kernel Responses (RFC 793 / RFC 9293):} Operating system kernels must reply with RST for packets to closed ports and SYN/ACK for active listening ports. Because these replies come directly from the kernel network stack, the scanner determines port states without establishing an application session, and ingests both SYN/ACK and RST frames for passive OS classification.
+    \item \textbf{Link-Layer Transmission via Npcap:} Standard Windows sockets (\texttt{SOCK\_RAW}) restrict raw TCP packet construction for unprivileged users. Interfacing directly with the Npcap driver via \texttt{ctypes} bypasses transport-layer limits and transmits custom Layer-2 Ethernet frames onto the local wire.
+    \item \textbf{Vendor Divergence in TCP Defaults and Option Ordering:} Operating system vendors configure distinct default values for initial TTL, TCP buffer window size, and option negotiation sequences. Windows defaults to an initial TTL of 128, while Linux and Apple Darwin use 64. In addition, Apple Darwin puts Window Scale before Timestamp ($\langle\text{MSS}, \text{WS}, \text{TS}, \text{SACK}\rangle$), while Linux puts SACK-Permitted before Timestamp ($\langle\text{MSS}, \text{SACK}, \text{TS}, \text{WS}\rangle$). This difference in sequence order distinguishes the two platforms directly.
+    \item \textbf{RFC 6864 IPv4 Identification Semantics:} Modern Linux kernels strictly implement RFC~6864 by zeroing out the IPv4 Identification field ($\text{IP ID} = 0$) on all datagrams where the Don't-Fragment (DF) bit is set. Conversely, Windows and BSD-derived kernels maintain non-zero, sequential, or randomized IP ID values regardless of the DF flag. This protocol property reliably disambiguates Linux hosts from macOS/BSD hosts even when both share an identical initial TTL of 64.
 \end{enumerate}
 
 \subsection{Operational Resilience and Failure Handling}
@@ -924,7 +1056,7 @@ Table~\ref{tab:outcomes} summarizes the target criteria for evaluating each atta
 1. Port Scan & Accurate port classification & Port states match host reality (Open, Closed, Filtered). & Compare scanner output with \texttt{netstat -an} on victim host. \\
 \rowcolor{lightbg}
 2. Banners & Software identification & Extracted string contains correct daemon name and version. & Match against service launch configurations and headers. \\
-3. OS Fingerprint & OS family classification & Target identified as Windows with confidence $\ge 80\%$. & Compare against victim system properties (\texttt{winver}). \\
+3. OS Fingerprint & OS family and version tier & Target classified with ranked probability distribution ($\ge 60\%$) and version tier identified. & Compare against victim system properties (\texttt{winver}, \texttt{uname -r}, \texttt{sw\_vers}). \\
 \rowcolor{lightbg}
 4. Exploits & Access compromise & Unauthorized read/access on target services demonstrated. & Session logs confirm anonymous FTP authentication and HTTP directory path traversal read. \\
 \bottomrule
@@ -934,7 +1066,7 @@ Table~\ref{tab:outcomes} summarizes the target criteria for evaluating each atta
 \clearpage
 
 \subsection{Anticipated Execution Telemetry and Verification Output}
-To verify pipeline behavior against its functional design criteria, the anticipated console output of an automated reconnaissance and exploit cycle is shown below. This trace details the data schema, heuristic classifications, and exploit verification results:
+To verify pipeline behavior against its functional design criteria, the anticipated console output of an automated reconnaissance and exploit cycle is shown below. This trace details the data schema, probabilistic classifications, and exploit verification results:
 
 \begin{terminalbox}[Attacker Console Output: Benchmark Execution Trace]
 \begin{verbatim}
@@ -944,15 +1076,15 @@ To verify pipeline behavior against its functional design criteria, the anticipa
   Target       : 192.168.0.116
   Attacker     : 192.168.0.105 (a0:29:42:92:ef:19)
   Target MAC   : d8:5e:d3:99:09:6c
-  Ports        : [21, 80, 443, 445]
+  Ports        : [21, 22, 80, 81]
   Scan delay   : 0.5s
 
   [PHASE 1] TCP SYN Port Scanning
   -----------------------------------------------------------
      21  OPEN                           TTL=128 WIN=65535
+     22  CLOSED                         TTL=128 WIN=0
      80  OPEN                           TTL=128 WIN=65535
-    443  NO RESPONSE / POSSIBLY FILTERED
-    445  OPEN                           TTL=128 WIN=65535
+     81  CLOSED                         TTL=128 WIN=0
 
   [PHASE 2] Service Banner Grabbing
   -----------------------------------------------------------
@@ -961,9 +1093,31 @@ To verify pipeline behavior against its functional design criteria, the anticipa
 
   [PHASE 3] OS Fingerprinting
   -----------------------------------------------------------
-  Likely OS  : Windows family (Confidence: 89%)
-  Version    : Windows 10/11 family
-  Evidence   : Initial TTL=128, Window=65535, MSS=1460
+  Candidate  : Open-Port TCP SYN/ACK
+  Likely OS  : Windows
+  Confidence : 60%
+  Version    : Windows 10 / 11 / Server 2016+
+                71%  Windows 10 / 11 / Server 2016+
+                29%  Windows 7 / 8 / Vista / Server 2008-2012
+                 0%  Windows 9x / 2000 (legacy)
+  TTL        : 128 (initial 128, ~0 hop(s))
+  Window     : 65535
+  DF bit     : set
+  IP ID      : 60211
+  Options    : ('MSS', 1460), ('NOP',), ('WSCALE', 8),
+               ('SACK_PERMITTED',), ('TIMESTAMP', ...)
+  Probability:
+    Windows           60%  ############
+    macOS / BSD       21%  ####
+    Linux             19%  ###
+    Network device     0%
+  Evidence   :
+    - initial TTL 128 (~128 observed, 0 hop(s)) matches Windows
+    - TCP window 65535 matches Windows, Linux, macOS / BSD
+    - Don't-Fragment (DF) bit set - modern TCP stack
+    - TCP option order ['MSS', 'WSCALE', 'SACK_PERMITTED', 'TIMESTAMP']
+      matches Windows layout
+    - IP ID is non-zero (60211) with DF set (Windows/BSD characteristic)
 
   [PHASE 5] Targeted Exploit Execution
   -----------------------------------------------------------
@@ -979,12 +1133,32 @@ To verify pipeline behavior against its functional design criteria, the anticipa
 =============================================================
   ATTACK SUMMARY
 =============================================================
-  Ports scanned : 4 | Open: 3 | Filtered: 1
-  Banners found : 2/2 | OS guess: Windows family (89%)
+  Ports scanned : 4 | Open: 2 | Closed: 2
+  Banners found : 2/2 | OS guess: Windows (60%)
   Exploits      : 2/2 successful (FTP Anonymous + HTTP Traversal)
 =============================================================
 \end{verbatim}
 \end{terminalbox}
+
+When active mitigation is enabled, the defense monitor on the victim detects the probe frequency and applies a dynamic firewall rule. The resulting console telemetry demonstrates the mitigation effect:
+
+\begin{terminalbox}[Victim Console Output: Defense Detection and Firewall Quarantine]
+\begin{verbatim}
+[14:20:05.12] [MONITOR] Inbound SYN probe received on port 21 from 192.168.0.105
+[14:20:05.63] [MONITOR] Inbound SYN probe received on port 22 from 192.168.0.105
+[14:20:06.14] [MONITOR] Inbound SYN probe received on port 80 from 192.168.0.105
+[14:20:06.65] [MONITOR] Inbound SYN probe received on port 81 from 192.168.0.105
+[14:20:07.16] [MONITOR] Inbound SYN probe received on port 135 from 192.168.0.105
+[14:20:07.67] [MONITOR] Inbound SYN probe received on port 139 from 192.168.0.105
+[14:20:08.18] [MONITOR] Inbound SYN probe received on port 443 from 192.168.0.105
+[14:20:08.69] [MONITOR] Inbound SYN probe received on port 445 from 192.168.0.105
+[14:20:08.70] [ALERT] Port scan detected from 192.168.0.105! (8 SYNs in 3.6s)
+[14:20:08.72] [MITIGATION] Adding Firewall rule: CustomPortScanBlock_192_168_0_105
+[14:20:08.78] [MITIGATION] Inbound TCP traffic from 192.168.0.105 is now BLOCKED.
+\end{verbatim}
+\end{terminalbox}
+
+Following rule insertion, subsequent scanner probes to the victim receive no reply, changing the port state to \texttt{NO RESPONSE / POSSIBLY FILTERED} and preventing exploit connections.
 
 \clearpage
 
@@ -1017,8 +1191,8 @@ When the monitor triggers an alert and mitigation is enabled, it adds an inbound
 
 \begin{terminalbox}[Windows Advanced Firewall Dynamic Block Rule Command]
 \begin{verbatim}
-netsh advfirewall firewall add rule name="CustomPortScanBlock_192_168_1_10" ^
-    dir=in action=block remoteip=192.168.1.10 protocol=TCP profile=any
+netsh advfirewall firewall add rule name="CustomPortScanBlock_192_168_0_105" ^
+    dir=in action=block remoteip=192.168.0.105 protocol=TCP profile=any
 \end{verbatim}
 \end{terminalbox}
 
@@ -1036,7 +1210,7 @@ The defense process records active rules in memory and removes them upon exit to
 % ----------------------------------------------------------------------
 \begin{thebibliography}{99}
 \footnotesize
-\setlength{\itemsep}{0pt}
+\setlength{\itemsep}{-2pt}
 \setlength{\parskip}{0pt}
 
 \bibitem{rfc793}
@@ -1047,6 +1221,18 @@ Postel, J., ``Internet Protocol,'' \textit{RFC 791}, Defense Advanced Research P
 
 \bibitem{rfc1071}
 Braden, R., Borman, D., and Partridge, C., ``Computing the Internet Checksum,'' \textit{RFC 1071}, 1988.
+
+\bibitem{rfc6864}
+Touch, J., ``Updated Specification of the IPv4 ID Field,'' \textit{RFC 6864}, 2013.
+
+\bibitem{rfc7323}
+Borman, D., Braden, B., Jacobson, V., and Scheffenegger, R., ``TCP Extensions for High Performance,'' \textit{RFC 7323}, 2014.
+
+\bibitem{rfc2018}
+Mathis, M., Mahdavi, J., Floyd, S., and Romanow, A., ``TCP Selective Acknowledgement Options,'' \textit{RFC 2018}, 1996.
+
+\bibitem{rfc9293}
+Eddy, W., ``Transmission Control Protocol (TCP),'' \textit{RFC 9293}, 2022.
 
 \bibitem{fyodor1998}
 Fyodor (Lyon, G.), ``Remote OS Detection via TCP/IP Stack Fingerprinting,'' \textit{Phrack Magazine}, vol.~8, no.~54, 1998.
