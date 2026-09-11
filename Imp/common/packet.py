@@ -152,20 +152,29 @@ def parse_ipv4(frame: bytes, offset: int):
         return None
 
     (
-        _vihl, _tos, total_length, identification,
+        _vihl, tos, total_length, identification,
         flags_fragment, ttl, protocol, ip_checksum,
         src, dst
     ) = struct.unpack(
         "!BBHHHBBH4s4s", frame[offset:offset + 20]
     )
 
+    # The 3-bit flags live in the top of the 16-bit flags/fragment word:
+    #   bit 15 = reserved, bit 14 = DF (Don't Fragment), bit 13 = MF.
+    df_flag = bool(flags_fragment & 0x4000)
+    mf_flag = bool(flags_fragment & 0x2000)
+
     return {
         "src_ip": socket.inet_ntoa(src),
         "dst_ip": socket.inet_ntoa(dst),
         "ihl": ihl,
+        "tos": tos,
         "total_length": total_length,
         "identification": identification,
+        "ip_id": identification,
         "flags_fragment": flags_fragment,
+        "df": df_flag,
+        "mf": mf_flag,
         "ttl": ttl,
         "protocol": protocol,
         "checksum": ip_checksum,

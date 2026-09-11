@@ -113,9 +113,18 @@ def scan(args):
         print(f"Likely OS : {fp['os']}")
         print(f"Confidence: {fp['confidence']}%")
         print(f"Version   : {fp['version']}")
-        print(f"TTL       : {fp['ttl']}")
+        if fp.get("version_tiers"):
+            for tier, pct in fp["version_tiers"]:
+                print(f"            {pct:3d}%  {tier}")
+        print(f"TTL       : {fp['ttl']} (initial {fp['initial_ttl']}, "
+              f"~{fp['hops']} hop(s))")
         print(f"Window    : {fp['window']}")
+        print(f"DF bit    : {'set' if fp['df'] else 'clear'}")
         print("Options   :", ", ".join(str(x) for x in fp["options"]) or "none")
+        print("Probability distribution:")
+        for cls, pct in fp["distribution"]:
+            bar = "#" * (pct // 5)
+            print(f"  {cls:16s} {pct:3d}%  {bar}")
         print("Evidence  :")
         for reason in fp["reasons"]:
             print(f"  - {reason}")
