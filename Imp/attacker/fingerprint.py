@@ -27,7 +27,7 @@ Each OS family accumulates weighted evidence; the totals are normalised into
 percentages so the caller sees a ranked distribution, not just one label.
 """
 
-from common.packet import parse_tcp_options
+from common.packet import parse_tcp_options, TCP_RST, TCP_SYN, TCP_ACK
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +68,8 @@ OPTION_ORDER_SIGNATURES = {
     "Windows": [
         ("MSS", "WSCALE", "SACK_PERMITTED"),
         ("MSS", "NOP", "WSCALE", "NOP", "NOP", "SACK_PERMITTED"),
+        ("MSS", "NOP", "WSCALE", "SACK_PERMITTED", "TIMESTAMP"),
+        ("MSS", "WSCALE", "SACK_PERMITTED", "TIMESTAMP"),
     ],
     "Linux": [
         ("MSS", "SACK_PERMITTED", "TIMESTAMP", "WSCALE"),
@@ -75,7 +77,7 @@ OPTION_ORDER_SIGNATURES = {
     ],
     "macOS / BSD": [
         ("MSS", "NOP", "WSCALE", "NOP", "NOP", "TIMESTAMP", "SACK_PERMITTED"),
-        ("MSS", "NOP", "WSCALE", "SACK_PERMITTED", "TIMESTAMP"),
+        ("MSS", "WSCALE", "TIMESTAMP", "SACK_PERMITTED"),
     ],
 }
 
@@ -259,6 +261,8 @@ def fingerprint(info):
         initial_ttl  : normalised initial TTL
         hops         : estimated router hops to the target
         df           : Don't-Fragment bit observed
+        ip_id        : IPv4 identification field
+        probe_type   : 'SYN/ACK' or 'RST'
     """
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
@@ -270,6 +274,9 @@ def fingerprint(info):
     ttl = info.get("ttl", 0)
     window = info.get("window", 0)
     df = bool(info.get("df", False))
+    ip_id = info.get("ip_id", info.get("identification", None))
+    flags = info.get("flags", 0)
+    is_rst = bool(flags & TCP_RST)
 
     initial_ttl, hops = normalise_ttl(ttl)
     option_order = _option_kind_sequence(options)
@@ -277,79 +284,112 @@ def fingerprint(info):
     scores = {cls: 0.0 for cls in OS_CLASSES}
     reasons = []
 
-    # --- Feature 1: initial TTL (strong, but shared 64<->many, 128<->Windows).
-    if ttl <= 0:
-        reasons.append("no TTL reading (no SYN/ACK captured)")
-    elif initial_ttl == 128:
-        scores["Windows"] += 3.0
-        reasons.append(f"initial TTL {initial_ttl} (~{ttl} observed, "
-                       f"{hops} hop(s)) is characteristic of Windows")
-    elif initial_ttl == 64:
-        scores["Linux"] += 2.0
-        scores["macOS / BSD"] += 2.0
-        reasons.append(f"initial TTL {initial_ttl} (~{ttl} observed, "
-                       f"{hops} hop(s)) is typical of Linux/macOS/BSD")
-    elif initial_ttl == 255:
-        scores["Network device"] += 3.0
-        scores["macOS / BSD"] += 0.5
-        reasons.append(f"initial TTL {initial_ttl} often indicates a network "
-                       f"device / Unix-style stack")
-    elif initial_ttl == 32:
-        scores["Windows"] += 1.0
-        reasons.append(f"initial TTL {initial_ttl} suggests a legacy Windows "
-                       f"9x-era stack")
+    if is_rst:
+        reasons.append("Probe response: TCP RST (Closed-Port Fingerprinting)")
+        if window == 0:
+            reasons.append("TCP window is 0 (standard closed-port RST response)")
+        else:
+            reasons.append(f"TCP window is {window}")
 
-    # --- Feature 2: advertised TCP window.
-    for cls, windows in WINDOW_SIGNATURES.items():
-        if window in windows:
-            scores[cls] += 1.5
-    matched_windows = [c for c, w in WINDOW_SIGNATURES.items() if window in w]
-    if matched_windows:
-        reasons.append(f"TCP window {window} matches "
-                       f"{', '.join(matched_windows)}")
+        if initial_ttl == 128:
+            scores["Windows"] += 4.5
+            reasons.append(f"RST with initial TTL {initial_ttl} and window {window} "
+                           f"strongly indicates Windows stack")
+        elif initial_ttl == 64:
+            scores["Linux"] += 2.5
+            scores["macOS / BSD"] += 2.0
+            reasons.append(f"RST with initial TTL {initial_ttl} indicates "
+                           f"Linux/macOS/BSD stack")
+        elif initial_ttl == 255:
+            scores["Network device"] += 4.0
+            reasons.append(f"RST with initial TTL {initial_ttl} indicates "
+                           f"network device or firewall")
     else:
-        reasons.append(f"TCP window {window} (no strong family match)")
+        # --- Feature 1: initial TTL (strong, but shared 64<->many, 128<->Windows).
+        if ttl <= 0:
+            reasons.append("no TTL reading (no SYN/ACK captured)")
+        elif initial_ttl == 128:
+            scores["Windows"] += 4.0
+            reasons.append(f"initial TTL {initial_ttl} (~{ttl} observed, "
+                           f"{hops} hop(s)) is characteristic of Windows")
+        elif initial_ttl == 64:
+            scores["Linux"] += 2.0
+            scores["macOS / BSD"] += 2.0
+            reasons.append(f"initial TTL {initial_ttl} (~{ttl} observed, "
+                           f"{hops} hop(s)) is typical of Linux/macOS/BSD")
+        elif initial_ttl == 255:
+            scores["Network device"] += 3.0
+            scores["macOS / BSD"] += 0.5
+            reasons.append(f"initial TTL {initial_ttl} often indicates a network "
+                           f"device / Unix-style stack")
+        elif initial_ttl == 32:
+            scores["Windows"] += 1.0
+            reasons.append(f"initial TTL {initial_ttl} suggests a legacy Windows "
+                           f"9x-era stack")
 
-    # --- Feature 3: Don't-Fragment bit. Modern Windows and Linux set DF on
-    # SYN/ACK; its absence leans (weakly) toward older/embedded stacks.
-    if df:
-        scores["Windows"] += 0.5
-        scores["Linux"] += 0.5
-        scores["macOS / BSD"] += 0.5
-        reasons.append("Don't-Fragment (DF) bit set - modern TCP stack")
-    else:
-        scores["Network device"] += 0.5
-        reasons.append("Don't-Fragment (DF) bit clear")
+        # --- Feature 2: advertised TCP window.
+        for cls, windows in WINDOW_SIGNATURES.items():
+            if window in windows:
+                scores[cls] += 1.5
+        matched_windows = [c for c, w in WINDOW_SIGNATURES.items() if window in w]
+        if matched_windows:
+            reasons.append(f"TCP window {window} matches "
+                           f"{', '.join(matched_windows)}")
+        else:
+            reasons.append(f"TCP window {window} (no strong family match)")
 
-    # --- Feature 4: TCP option ORDER (strong discriminator).
-    order_matched = False
-    for cls, orders in OPTION_ORDER_SIGNATURES.items():
-        if any(_orders_match(option_order, ref) for ref in orders):
-            scores[cls] += 3.0
-            reasons.append(f"TCP option order {option_order} matches "
-                           f"a known {cls} layout")
-            order_matched = True
-    if option_order and not order_matched:
-        reasons.append(f"TCP option order {option_order} "
-                       f"(no exact family layout match)")
+        # --- Feature 3: Don't-Fragment bit. Modern Windows and Linux set DF on
+        # SYN/ACK; its absence leans (weakly) toward older/embedded stacks.
+        if df:
+            scores["Windows"] += 0.5
+            scores["Linux"] += 0.5
+            scores["macOS / BSD"] += 0.5
+            reasons.append("Don't-Fragment (DF) bit set - modern TCP stack")
+        else:
+            scores["Network device"] += 0.5
+            reasons.append("Don't-Fragment (DF) bit clear")
 
-    # --- Feature 5: presence of specific options (weak corroboration).
-    if has_ts:
-        # Windows historically omits the TCP timestamp on SYN/ACK by default;
-        # Linux/macOS/BSD include it.
-        scores["Linux"] += 1.0
-        scores["macOS / BSD"] += 1.0
-        reasons.append("TCP timestamp present (leans Unix-like)")
-    else:
-        scores["Windows"] += 0.5
-        reasons.append("TCP timestamp absent (leans Windows)")
+        # --- Feature 4: TCP option ORDER (strong discriminator).
+        order_matched = False
+        for cls, orders in OPTION_ORDER_SIGNATURES.items():
+            if any(_orders_match(option_order, ref) for ref in orders):
+                scores[cls] += 3.0
+                reasons.append(f"TCP option order {option_order} matches "
+                               f"a known {cls} layout")
+                order_matched = True
+        if option_order and not order_matched:
+            reasons.append(f"TCP option order {option_order} "
+                           f"(no exact family layout match)")
 
-    if has_sack:
-        reasons.append("SACK permitted")
-    if mss is not None:
-        reasons.append(f"MSS={mss}")
-    if wscale is not None:
-        reasons.append(f"window scale={wscale}")
+        # --- Feature 5: presence of specific options (weak corroboration).
+        if has_ts:
+            # Windows historically omits the TCP timestamp on SYN/ACK by default;
+            # Linux/macOS/BSD include it.
+            scores["Linux"] += 1.0
+            scores["macOS / BSD"] += 1.0
+            reasons.append("TCP timestamp present (leans Unix-like)")
+        else:
+            scores["Windows"] += 0.5
+            reasons.append("TCP timestamp absent (leans Windows)")
+
+        if has_sack:
+            reasons.append("SACK permitted")
+        if mss is not None:
+            reasons.append(f"MSS={mss}")
+        if wscale is not None:
+            reasons.append(f"window scale={wscale}")
+
+    # --- Feature: IPv4 Identification (RFC 6864 heuristic).
+    # Linux kernels zero out the IP ID field when DF is set on atomic datagrams.
+    # Windows and BSD stacks traditionally generate non-zero or incremental IDs.
+    if ip_id is not None:
+        if df and ip_id == 0:
+            scores["Linux"] += 1.5
+            reasons.append("IP ID is 0 with DF set (RFC 6864, characteristic of Linux)")
+        elif df and ip_id > 0:
+            scores["Windows"] += 0.8
+            scores["macOS / BSD"] += 0.4
+            reasons.append(f"IP ID is non-zero ({ip_id}) with DF set (characteristic of Windows/BSD)")
 
     # --- Turn raw scores into a probability distribution. -------------------
     total = sum(scores.values())
@@ -386,16 +426,20 @@ def fingerprint(info):
                 f"{distribution[1][0]} {distribution[1][1]}%) - low certainty"
             )
         # Refine the winning family into a coarse-but-honest version tier.
-        feats = {
-            "initial_ttl": initial_ttl,
-            "window": window,
-            "wscale": wscale,
-            "mss": mss,
-            "has_ts": has_ts,
-            "has_sack": has_sack,
-            "df": df,
-        }
-        version, version_tiers = refine_version(best_os, feats)
+        if is_rst:
+            version = f"{best_os} family (closed-port RST; open port required for build-tiering)"
+            version_tiers = []
+        else:
+            feats = {
+                "initial_ttl": initial_ttl,
+                "window": window,
+                "wscale": wscale,
+                "mss": mss,
+                "has_ts": has_ts,
+                "has_sack": has_sack,
+                "df": df,
+            }
+            version, version_tiers = refine_version(best_os, feats)
 
         if confidence < 40:
             best_os = f"{best_os} (uncertain)"
@@ -411,6 +455,8 @@ def fingerprint(info):
         "hops": hops,
         "window": window,
         "df": df,
+        "ip_id": ip_id,
+        "probe_type": "RST" if is_rst else "SYN/ACK",
         "options": options,
         "reasons": reasons,
     }

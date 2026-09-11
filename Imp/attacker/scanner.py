@@ -6,7 +6,10 @@ import ipaddress
 import random
 import time
 
-from common.packet import build_syn_frame, parse_ipv4_tcp_frame, TCP_ACK, TCP_RST, TCP_SYN
+from common.packet import (
+    build_syn_frame, parse_ipv4_tcp_frame, TCP_ACK, TCP_RST, TCP_SYN,
+    STANDARD_SYN_OPTIONS,
+)
 from common.npcap import Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
 from fingerprint import fingerprint
 
@@ -51,7 +54,8 @@ def scan(args):
                 src_mac, dst_mac,
                 local_ip, args.target,
                 src_port, port,
-                seq
+                seq,
+                options=STANDARD_SYN_OPTIONS,
             )
 
             sent_at = time.monotonic()
@@ -90,6 +94,9 @@ def scan(args):
                 if flags & TCP_RST:
                     state = "CLOSED"
                     result = info
+                    # Fallback candidate: store RST if no SYN/ACK candidate found yet
+                    if fingerprint_candidate is None or (fingerprint_candidate.get("flags", 0) & TCP_RST):
+                        fingerprint_candidate = info
                     break
 
             observations.append((port, state, result))
@@ -108,28 +115,32 @@ def scan(args):
     if fingerprint_candidate:
         fp = fingerprint(fingerprint_candidate)
 
+        candidate_type = "Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK"
         print("\nOS fingerprint")
         print("----------------")
-        print(f"Likely OS : {fp['os']}")
-        print(f"Confidence: {fp['confidence']}%")
-        print(f"Version   : {fp['version']}")
+        print(f"Probe Source: {candidate_type}")
+        print(f"Likely OS   : {fp['os']}")
+        print(f"Confidence  : {fp['confidence']}%")
+        print(f"Version     : {fp['version']}")
         if fp.get("version_tiers"):
             for tier, pct in fp["version_tiers"]:
-                print(f"            {pct:3d}%  {tier}")
-        print(f"TTL       : {fp['ttl']} (initial {fp['initial_ttl']}, "
+                print(f"              {pct:3d}%  {tier}")
+        print(f"TTL         : {fp['ttl']} (initial {fp['initial_ttl']}, "
               f"~{fp['hops']} hop(s))")
-        print(f"Window    : {fp['window']}")
-        print(f"DF bit    : {'set' if fp['df'] else 'clear'}")
-        print("Options   :", ", ".join(str(x) for x in fp["options"]) or "none")
+        print(f"Window      : {fp['window']}")
+        print(f"DF bit      : {'set' if fp['df'] else 'clear'}")
+        if fp.get("ip_id") is not None:
+            print(f"IP ID       : {fp['ip_id']}")
+        print("Options     :", ", ".join(str(x) for x in fp["options"]) or "none")
         print("Probability distribution:")
         for cls, pct in fp["distribution"]:
             bar = "#" * (pct // 5)
             print(f"  {cls:16s} {pct:3d}%  {bar}")
-        print("Evidence  :")
+        print("Evidence    :")
         for reason in fp["reasons"]:
             print(f"  - {reason}")
     else:
-        print("\nNo SYN/ACK was observed, so OS fingerprint confidence is low.")
+        print("\nNo SYN/ACK or RST response was observed (host may be down or ports filtered).")
 
 
 def main():

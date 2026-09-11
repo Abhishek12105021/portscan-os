@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT))                 # for `common` package
 sys.path.insert(0, str(ROOT / "attacker"))    # for `fingerprint` module
 
 from fingerprint import fingerprint, normalise_ttl
+from common.packet import TCP_RST, TCP_SYN, TCP_ACK
 
 
 def _synack(ttl, window, options, df=True):
@@ -93,6 +94,57 @@ class VersionTierTests(unittest.TestCase):
     def test_modern_linux_tier(self):
         fp = fingerprint(_synack(58, 29200, LINUX_OPTS))
         self.assertIn("modern", fp["version_tiers"][0][0].lower())
+
+
+class ClosedPortRstTests(unittest.TestCase):
+    def test_windows_closed_port_rst(self):
+        rst_info = {
+            "ttl": 128,
+            "window": 0,
+            "options": b"",
+            "df": False,
+            "flags": TCP_RST,
+        }
+        fp = fingerprint(rst_info)
+        self.assertTrue(fp["os"].startswith("Windows"))
+        self.assertEqual(fp["initial_ttl"], 128)
+        self.assertEqual(fp["window"], 0)
+        self.assertEqual(fp["probe_type"], "RST")
+        self.assertGreaterEqual(fp["confidence"], 70)
+        self.assertTrue(any("Closed-Port" in r for r in fp["reasons"]))
+
+    def test_linux_closed_port_rst(self):
+        rst_info = {
+            "ttl": 64,
+            "window": 0,
+            "options": b"",
+            "df": True,
+            "ip_id": 0,
+            "flags": TCP_RST,
+        }
+        fp = fingerprint(rst_info)
+        self.assertTrue(fp["os"].startswith("Linux"))
+        self.assertEqual(fp["initial_ttl"], 64)
+        self.assertEqual(fp["probe_type"], "RST")
+        self.assertEqual(fp["distribution"][0][0], "Linux")
+
+
+class IpIdHeuristicTests(unittest.TestCase):
+    def test_linux_ip_id_zero_rfc6864(self):
+        synack = _synack(64, 29200, LINUX_OPTS, df=True)
+        synack["ip_id"] = 0
+        synack["flags"] = TCP_SYN | TCP_ACK
+        fp = fingerprint(synack)
+        self.assertIn("Linux", fp["os"])
+        self.assertTrue(any("RFC 6864" in r for r in fp["reasons"]))
+
+    def test_windows_ip_id_nonzero(self):
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        synack["ip_id"] = 34521
+        synack["flags"] = TCP_SYN | TCP_ACK
+        fp = fingerprint(synack)
+        self.assertTrue(fp["os"].startswith("Windows"))
+        self.assertTrue(any("non-zero" in r for r in fp["reasons"]))
 
 
 if __name__ == "__main__":

@@ -113,12 +113,24 @@ def build_tcp(src_ip: str, dst_ip: str, src_port: int, dst_port: int,
     ) + options
 
 
+# Standard SYN options offering MSS, SACK Permitted, Timestamp, and Window Scale.
+# This triggers rich TCP option negotiation on Apple Darwin, Linux, and Windows.
+STANDARD_SYN_OPTIONS = (
+    b"\x02\x04\x05\xb4"                            # MSS 1460
+    b"\x04\x02"                                    # SACK permitted
+    b"\x08\x0a\x00\x00\x00\x01\x00\x00\x00\x00"    # Timestamp
+    b"\x01"                                        # NOP
+    b"\x03\x03\x08"                                # Window scale 8
+)
+
+
 def build_syn_frame(src_mac: str, dst_mac: str,
                     src_ip: str, dst_ip: str,
                     src_port: int, dst_port: int,
-                    sequence: int, ttl: int = 64) -> bytes:
+                    sequence: int, ttl: int = 64,
+                    options: bytes = b"") -> bytes:
     tcp = build_tcp(
-        src_ip, dst_ip, src_port, dst_port, sequence
+        src_ip, dst_ip, src_port, dst_port, sequence, options=options
     )
     ip = build_ipv4(
         src_ip, dst_ip, tcp, identification=sequence & 0xFFFF, ttl=ttl
