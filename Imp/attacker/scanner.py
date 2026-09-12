@@ -7,7 +7,7 @@ import random
 import time
 
 from common.packet import (
-    build_syn_frame, build_ecn_syn_frame, parse_ipv4_tcp_frame, parse_tcp_options, TCP_ACK, TCP_RST, TCP_SYN,
+    build_syn_frame, build_ecn_syn_frame, build_synfin_frame, parse_ipv4_tcp_frame, parse_tcp_options, TCP_ACK, TCP_RST, TCP_SYN,
     STANDARD_SYN_OPTIONS,
 )
 from common.npcap import Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
@@ -122,14 +122,17 @@ def scan(args):
     # Collect TCP Timestamp samples across probes (Idea 3)
     ts_samples = []
     open_port_candidate = None
+    closed_port_candidate = None
     for p, s, res in observations:
+        if s == "OPEN" and open_port_candidate is None:
+            open_port_candidate = p
+        elif s == "CLOSED" and closed_port_candidate is None:
+            closed_port_candidate = p
         if res and res.get("options"):
             opts = parse_tcp_options(res["options"])
             for opt in opts:
                 if opt[0] == "TIMESTAMP":
                     ts_samples.append((res.get("recv_time", time.monotonic()), opt[1]))
-                    if s == "OPEN":
-                        open_port_candidate = p
 
     # RFC 3168 ECN Probe (Idea 4) & Clock Measurement
     ecn_info = {"tested": False}
@@ -191,6 +194,129 @@ def scan(args):
             "reason": "No open port observed for ECN negotiation",
         }
 
+    # Ambiguous / Invalid TCP Flags Probe (Idea 5 - SYN+FIN "Rule-Breaker")
+    invalid_flags_info = {"tested": False}
+    if open_port_candidate is not None:
+        inv_port = open_port_candidate
+        inv_src_port = random.randint(45000, 60000)
+        time.sleep(0.3)
+        open_resp = False
+        open_flags = None
+        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as inv_cap:
+            inv_seq = rng.randrange(1, 0xFFFFFFFF)
+            inv_frame = build_synfin_frame(
+                src_mac, dst_mac,
+                local_ip, args.target,
+                inv_src_port, inv_port,
+                inv_seq,
+                options=STANDARD_SYN_OPTIONS,
+            )
+            i_sent = time.monotonic()
+            inv_cap.send(inv_frame)
+            i_deadline = i_sent + min(args.timeout, 1.5)
+            while time.monotonic() < i_deadline:
+                i_raw = inv_cap.recv()
+                if not i_raw:
+                    continue
+                i_info = parse_ipv4_tcp_frame(i_raw)
+                if not i_info:
+                    continue
+                if (
+                    i_info["src_ip"] == args.target
+                    and i_info["dst_ip"] == local_ip
+                    and i_info["src_port"] == inv_port
+                    and i_info["dst_port"] == inv_src_port
+                ):
+                    open_resp = True
+                    open_flags = i_info["flags"]
+                    if "ip_id" in i_info:
+                        ip_ids.append(i_info["ip_id"])
+                    break
+
+        closed_resp = None
+        # If open port silently dropped (Unix/Darwin behavior), test closed port if available
+        if not open_resp and closed_port_candidate is not None:
+            c_port = closed_port_candidate
+            c_src_port = random.randint(45000, 60000)
+            time.sleep(0.3)
+            with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as c_cap:
+                c_seq = rng.randrange(1, 0xFFFFFFFF)
+                c_frame = build_synfin_frame(
+                    src_mac, dst_mac,
+                    local_ip, args.target,
+                    c_src_port, c_port,
+                    c_seq,
+                    options=STANDARD_SYN_OPTIONS,
+                )
+                c_sent = time.monotonic()
+                c_cap.send(c_frame)
+                c_deadline = c_sent + min(args.timeout, 1.2)
+                closed_resp = False
+                while time.monotonic() < c_deadline:
+                    c_raw = c_cap.recv()
+                    if not c_raw:
+                        continue
+                    c_info = parse_ipv4_tcp_frame(c_raw)
+                    if not c_info:
+                        continue
+                    if (
+                        c_info["src_ip"] == args.target
+                        and c_info["dst_ip"] == local_ip
+                        and c_info["src_port"] == c_port
+                        and c_info["dst_port"] == c_src_port
+                    ):
+                        closed_resp = True
+                        if "ip_id" in c_info:
+                            ip_ids.append(c_info["ip_id"])
+                        break
+
+        invalid_flags_info = {
+            "tested": True,
+            "probe": "SYN+FIN",
+            "open_port_responded": open_resp,
+            "open_port_flags": open_flags,
+            "closed_port_responded": closed_resp,
+        }
+    elif closed_port_candidate is not None:
+        c_port = closed_port_candidate
+        c_src_port = random.randint(45000, 60000)
+        time.sleep(0.3)
+        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as c_cap:
+            c_seq = rng.randrange(1, 0xFFFFFFFF)
+            c_frame = build_synfin_frame(
+                src_mac, dst_mac,
+                local_ip, args.target,
+                c_src_port, c_port,
+                c_seq,
+                options=STANDARD_SYN_OPTIONS,
+            )
+            c_sent = time.monotonic()
+            c_cap.send(c_frame)
+            c_deadline = c_sent + min(args.timeout, 1.2)
+            closed_resp = False
+            while time.monotonic() < c_deadline:
+                c_raw = c_cap.recv()
+                if not c_raw:
+                    continue
+                c_info = parse_ipv4_tcp_frame(c_raw)
+                if not c_info:
+                    continue
+                if (
+                    c_info["src_ip"] == args.target
+                    and c_info["dst_ip"] == local_ip
+                    and c_info["src_port"] == c_port
+                    and c_info["dst_port"] == c_src_port
+                ):
+                    closed_resp = True
+                    break
+        invalid_flags_info = {
+            "tested": True,
+            "probe": "SYN+FIN",
+            "open_port_responded": False,
+            "open_port_flags": None,
+            "closed_port_responded": closed_resp,
+        }
+
     # If only 1 timestamp sample is available and an open port exists,
     # send a follow-up standard probe to measure clock frequency
     if len(ts_samples) == 1 and open_port_candidate is not None:
@@ -236,6 +362,7 @@ def scan(args):
         fingerprint_candidate["ip_ids"] = ip_ids
         fingerprint_candidate["ts_samples"] = ts_samples
         fingerprint_candidate["ecn_info"] = ecn_info
+        fingerprint_candidate["invalid_flags_info"] = invalid_flags_info
         fp = fingerprint(fingerprint_candidate)
 
         candidate_type = "Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK"
@@ -275,6 +402,8 @@ def scan(args):
                 print("ECN Probe   : Dropped / Blocked by Firewall")
             else:
                 print(f"ECN Probe   : {fp['ecn_status']} (Flags: 0x{fp.get('ecn_flags', 0):02x})")
+        if fp.get("invalid_flags_status") and fp["invalid_flags_status"] != "NOT_TESTED":
+            print(f"Invalid Flgs: {fp.get('invalid_flags_description', fp['invalid_flags_status'])}")
         print("Probability distribution:")
         for cls, pct in fp["distribution"]:
             bar = "#" * (pct // 5)

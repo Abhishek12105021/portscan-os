@@ -154,6 +154,54 @@ def build_ecn_syn_frame(src_mac: str, dst_mac: str,
     )
 
 
+def build_synfin_frame(src_mac: str, dst_mac: str,
+                       src_ip: str, dst_ip: str,
+                       src_port: int, dst_port: int,
+                       sequence: int, ttl: int = 64,
+                       options: bytes = b"") -> bytes:
+    """Builds an ambiguous SYN+FIN probe frame (The 'Rule-Breaker' Test - Idea 5)."""
+    return build_syn_frame(
+        src_mac=src_mac, dst_mac=dst_mac,
+        src_ip=src_ip, dst_ip=dst_ip,
+        src_port=src_port, dst_port=dst_port,
+        sequence=sequence, ttl=ttl,
+        options=options,
+        flags=TCP_SYN | TCP_FIN,
+    )
+
+
+def build_null_frame(src_mac: str, dst_mac: str,
+                     src_ip: str, dst_ip: str,
+                     src_port: int, dst_port: int,
+                     sequence: int, ttl: int = 64,
+                     options: bytes = b"") -> bytes:
+    """Builds a NULL scan frame with no flags set (flags = 0)."""
+    return build_syn_frame(
+        src_mac=src_mac, dst_mac=dst_mac,
+        src_ip=src_ip, dst_ip=dst_ip,
+        src_port=src_port, dst_port=dst_port,
+        sequence=sequence, ttl=ttl,
+        options=options,
+        flags=0,
+    )
+
+
+def build_xmas_frame(src_mac: str, dst_mac: str,
+                     src_ip: str, dst_ip: str,
+                     src_port: int, dst_port: int,
+                     sequence: int, ttl: int = 64,
+                     options: bytes = b"") -> bytes:
+    """Builds an Xmas scan frame with FIN, PSH, and URG flags set."""
+    return build_syn_frame(
+        src_mac=src_mac, dst_mac=dst_mac,
+        src_ip=src_ip, dst_ip=dst_ip,
+        src_port=src_port, dst_port=dst_port,
+        sequence=sequence, ttl=ttl,
+        options=options,
+        flags=TCP_FIN | TCP_PSH | TCP_URG,
+    )
+
+
 def parse_ethernet(frame: bytes):
     if len(frame) < 14:
         return None

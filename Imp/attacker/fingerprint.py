@@ -802,14 +802,113 @@ def evaluate_ecn(ecn_info):
 
 
 # ---------------------------------------------------------------------------
+# Ambiguous / Invalid TCP Flags Probe Analysis (Idea 5)
+# ---------------------------------------------------------------------------
+
+def evaluate_invalid_flags(invalid_flags_info):
+    """
+    Evaluate server response to ambiguous or invalid TCP flag combinations (Idea 5: Rule-Breaker Test).
+    Standard RFC 793 / 9293 specification dictates that TCP listening sockets (open ports)
+    silently drop incoming packets with illegal flag combinations (such as SYN+FIN, NULL, or Xmas)
+    that lack an ACK bit.
+
+    Windows TCP/IP stacks famously violate this specification by generating an RST/ACK (Flags=0x14)
+    response to invalid probes even on OPEN listening ports.
+
+    Linux / Unix stacks adhere strictly to RFC 793 and silently drop invalid packets on open ports.
+    On closed ports, Linux returns RST/ACK, whereas Apple Darwin (iOS/iPadOS/macOS) drops SYN+FIN
+    on both open and closed ports without responding.
+
+    Parameters:
+        invalid_flags_info (dict or None): Dictionary with probe results:
+            - 'tested': bool
+            - 'probe': str (e.g. 'SYN+FIN')
+            - 'open_port_responded': bool
+            - 'open_port_flags': int or None
+            - 'open_port_ttl': int or None
+            - 'closed_port_responded': bool (optional)
+            - 'closed_port_flags': int or None (optional)
+
+    Returns:
+        dict with:
+            'status': str ('WINDOWS_RST_ON_INVALID', 'UNIX_SILENT_DROP', 'DARWIN_TOTAL_DROP', or 'NOT_TESTED')
+            'probe': str or None
+            'scores': dict of {os_class: float}
+            'reason': str or None
+            'description': str
+    """
+    if not invalid_flags_info or not invalid_flags_info.get("tested"):
+        return {
+            "status": "NOT_TESTED",
+            "probe": None,
+            "scores": {},
+            "reason": None,
+            "description": "Invalid flags probe not performed",
+        }
+
+    probe = invalid_flags_info.get("probe", "SYN+FIN")
+    open_resp = invalid_flags_info.get("open_port_responded", False)
+    open_flags = invalid_flags_info.get("open_port_flags")
+    closed_resp = invalid_flags_info.get("closed_port_responded")
+
+    # Archetype 1: Windows Non-RFC Compliant RST on Open Port
+    if open_resp and (open_flags is not None) and (open_flags & TCP_RST):
+        return {
+            "status": "WINDOWS_RST_ON_INVALID",
+            "probe": probe,
+            "scores": {"Windows": 2.5},
+            "reason": f"Ambiguous/invalid TCP flags ({probe}) on open port elicited RST response (Flags=0x{open_flags:02x}) -- characteristic of Windows stack (RFC 793 rule-breaker)",
+            "description": f"RST on Open Port (Flags=0x{open_flags:02x}, Windows Rule-Breaker)",
+        }
+
+    # Archetype 2: Unix / Linux / Darwin Silent Drop on Open Port
+    if not open_resp:
+        if closed_resp is False:
+            # Darwin BSD behavior: drops SYN+FIN on both open and closed ports!
+            return {
+                "status": "DARWIN_TOTAL_DROP",
+                "probe": probe,
+                "scores": {"macOS / BSD": 2.5, "Linux": 0.5},
+                "reason": f"Ambiguous/invalid TCP flags ({probe}) silently dropped on both open and closed ports -- characteristic of Apple Darwin / BSD packet filtering",
+                "description": f"Silently Dropped (Open & Closed, Apple Darwin / BSD)",
+            }
+        elif closed_resp is True:
+            # Linux behavior: drops on open, responds with RST on closed
+            return {
+                "status": "LINUX_STANDARD_DROP",
+                "probe": probe,
+                "scores": {"Linux": 2.0, "macOS / BSD": 1.0},
+                "reason": f"Ambiguous/invalid TCP flags ({probe}) silently dropped on open port but RST on closed port -- RFC 793 compliant Linux/Unix behavior",
+                "description": f"Silently Dropped on Open Port (RFC 793 Linux/Unix)",
+            }
+        else:
+            return {
+                "status": "UNIX_SILENT_DROP",
+                "probe": probe,
+                "scores": {"Linux": 1.5, "macOS / BSD": 1.5},
+                "reason": f"Ambiguous/invalid TCP flags ({probe}) on open port silently dropped without response -- RFC 793 compliant Unix behavior (Linux / BSD / macOS)",
+                "description": f"Silently Dropped on Open Port (RFC 793 Unix Standard)",
+            }
+
+    return {
+        "status": "INVALID_OTHER",
+        "probe": probe,
+        "scores": {},
+        "reason": f"Ambiguous/invalid TCP flags ({probe}) returned unexpected response (Flags=0x{open_flags:02x})",
+        "description": f"Unexpected Response (Flags=0x{open_flags:02x})",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main engine
 # ---------------------------------------------------------------------------
 
-def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None):
+def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None, invalid_flags_info=None):
     """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST)
     with optional cross-layer application banner correlation (Idea 7.1),
     multi-probe IP ID sequence tracking (Idea 2), TCP timestamp clock/uptime
-    analysis (Idea 3), and active RFC 3168 ECN probe evaluation (Idea 4).
+    analysis (Idea 3), active RFC 3168 ECN probe evaluation (Idea 4),
+    and ambiguous/invalid TCP flag response analysis (Idea 5).
 
     The returned dict keeps the keys the previous engine exposed
     (os, confidence, version, ttl, window, options, reasons) so existing
@@ -830,6 +929,9 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None)
         ecn_flags    : response flags on ECN probe
         ecn_reflected: whether ECE bit was reflected
         ecn_description: summary description of ECN probe result
+        invalid_flags_status : invalid flags classification (WINDOWS_RST_ON_INVALID, etc.)
+        invalid_flags_probe  : probe type used (e.g. 'SYN+FIN')
+        invalid_flags_description : summary description of invalid flags response
         probe_type   : 'SYN/ACK' or 'RST'
         banners      : input application banners
         banner_evidence : list of correlated banner signatures
@@ -847,6 +949,9 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None)
 
     if ecn_info is None:
         ecn_info = info.get("ecn_info", info.get("ecn"))
+
+    if invalid_flags_info is None:
+        invalid_flags_info = info.get("invalid_flags_info", info.get("invalid_flags"))
 
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
@@ -993,6 +1098,13 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None)
     if ecn_res["reason"]:
         reasons.append(ecn_res["reason"])
 
+    # --- Feature: Ambiguous / Invalid TCP Flags Probe (Idea 5)
+    inv_res = evaluate_invalid_flags(invalid_flags_info)
+    for cls, s in inv_res["scores"].items():
+        scores[cls] += s
+    if inv_res["reason"]:
+        reasons.append(inv_res["reason"])
+
     # --- Turn raw scores into a probability distribution. -------------------
     total = sum(scores.values())
     if total <= 0:
@@ -1077,6 +1189,9 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None)
         "ecn_flags": ecn_res["flags"],
         "ecn_reflected": ecn_res["ece_reflected"],
         "ecn_description": ecn_res["description"],
+        "invalid_flags_status": inv_res["status"],
+        "invalid_flags_probe": inv_res["probe"],
+        "invalid_flags_description": inv_res["description"],
         "probe_type": "RST" if is_rst else "SYN/ACK",
         "options": options,
         "banners": banners,

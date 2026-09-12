@@ -10,9 +10,9 @@ sys.path.insert(0, str(ROOT))                 # for `common` package
 sys.path.insert(0, str(ROOT / "attacker"))    # for `fingerprint` module
 
 from fingerprint import (
-    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps, evaluate_ecn
+    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps, evaluate_ecn, evaluate_invalid_flags
 )
-from common.packet import TCP_RST, TCP_SYN, TCP_ACK, TCP_ECE, TCP_CWR
+from common.packet import TCP_RST, TCP_SYN, TCP_ACK, TCP_ECE, TCP_CWR, TCP_FIN
 
 
 def _synack(ttl, window, options, df=True):
@@ -385,6 +385,80 @@ class EcnProbeFingerprintTests(unittest.TestCase):
         synack = _synack(64, 5840, LINUX_OPTS, df=True)
         fp = fingerprint(synack)
         self.assertEqual(fp["ecn_status"], "NOT_TESTED")
+
+
+class InvalidFlagsFingerprintTests(unittest.TestCase):
+    def test_windows_rst_on_open_port(self):
+        info = {
+            "tested": True,
+            "probe": "SYN+FIN",
+            "open_port_responded": True,
+            "open_port_flags": TCP_RST | TCP_ACK,
+        }
+        res = evaluate_invalid_flags(info)
+        self.assertEqual(res["status"], "WINDOWS_RST_ON_INVALID")
+        self.assertGreater(res["scores"].get("Windows", 0), 0)
+
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        synack["invalid_flags_info"] = info
+        fp = fingerprint(synack)
+        self.assertEqual(fp["invalid_flags_status"], "WINDOWS_RST_ON_INVALID")
+        self.assertTrue(any("RFC 793 rule-breaker" in r for r in fp["reasons"]))
+
+    def test_darwin_total_drop(self):
+        info = {
+            "tested": True,
+            "probe": "SYN+FIN",
+            "open_port_responded": False,
+            "closed_port_responded": False,
+        }
+        res = evaluate_invalid_flags(info)
+        self.assertEqual(res["status"], "DARWIN_TOTAL_DROP")
+        self.assertGreater(res["scores"].get("macOS / BSD", 0), 0)
+
+        synack = _synack(64, 65535, LINUX_OPTS, df=True)
+        synack["invalid_flags_info"] = info
+        fp = fingerprint(synack)
+        self.assertEqual(fp["invalid_flags_status"], "DARWIN_TOTAL_DROP")
+        self.assertTrue(any("Apple Darwin / BSD packet filtering" in r for r in fp["reasons"]))
+
+    def test_linux_standard_drop(self):
+        info = {
+            "tested": True,
+            "probe": "SYN+FIN",
+            "open_port_responded": False,
+            "closed_port_responded": True,
+        }
+        res = evaluate_invalid_flags(info)
+        self.assertEqual(res["status"], "LINUX_STANDARD_DROP")
+        self.assertGreater(res["scores"].get("Linux", 0), 0)
+
+        synack = _synack(64, 29200, LINUX_OPTS, df=True)
+        synack["invalid_flags_info"] = info
+        fp = fingerprint(synack)
+        self.assertEqual(fp["invalid_flags_status"], "LINUX_STANDARD_DROP")
+        self.assertTrue(any("RFC 793 compliant Linux/Unix" in r for r in fp["reasons"]))
+
+    def test_unix_silent_drop_fallback(self):
+        info = {
+            "tested": True,
+            "probe": "SYN+FIN",
+            "open_port_responded": False,
+            "closed_port_responded": None,
+        }
+        res = evaluate_invalid_flags(info)
+        self.assertEqual(res["status"], "UNIX_SILENT_DROP")
+        self.assertGreater(res["scores"].get("Linux", 0), 0)
+        self.assertGreater(res["scores"].get("macOS / BSD", 0), 0)
+
+    def test_invalid_flags_not_tested_graceful(self):
+        res = evaluate_invalid_flags(None)
+        self.assertEqual(res["status"], "NOT_TESTED")
+        self.assertEqual(res["scores"], {})
+
+        synack = _synack(64, 5840, LINUX_OPTS, df=True)
+        fp = fingerprint(synack)
+        self.assertEqual(fp["invalid_flags_status"], "NOT_TESTED")
 
 
 if __name__ == "__main__":
