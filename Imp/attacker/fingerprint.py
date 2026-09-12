@@ -550,13 +550,156 @@ def classify_ipid_sequence(ip_ids, df=True):
 
 
 # ---------------------------------------------------------------------------
+# TCP Timestamp Clock Frequency & System Uptime Analysis (Idea 3)
+# ---------------------------------------------------------------------------
+
+def _format_uptime(seconds: float) -> str:
+    """Format seconds into human-readable days, hours, minutes."""
+    sec = int(seconds)
+    days = sec // 86400
+    hours = (sec % 86400) // 3600
+    minutes = (sec % 3600) // 60
+    if days > 0:
+        return f"{days} day(s), {hours} hour(s), {minutes} min(s)"
+    elif hours > 0:
+        return f"{hours} hour(s), {minutes} min(s)"
+    else:
+        return f"{minutes} min(s)"
+
+
+def analyze_tcp_timestamps(ts_samples):
+    """
+    Analyze TCP Timestamp (RFC 7323 / RFC 1323) values across timed probes.
+
+    Parameters:
+        ts_samples: list of (recv_time, tsval) tuples.
+                    recv_time is in seconds (e.g. time.monotonic()),
+                    tsval is a 32-bit unsigned int.
+
+    Returns:
+        dict with:
+            'class': str ('HZ_1000', 'HZ_250', 'HZ_100', 'HZ_10', 'RANDOM_OFFSET', 'SINGLE_SAMPLE', 'NONE')
+            'rate': float or None (estimated clock rate in Hz)
+            'uptime_seconds': float or None
+            'uptime_str': str or None
+            'scores': dict of {os_class: float}
+            'reason': str or None
+            'description': str
+    """
+    if not ts_samples:
+        return {
+            "class": "NONE",
+            "rate": None,
+            "uptime_seconds": None,
+            "uptime_str": None,
+            "scores": {},
+            "reason": None,
+            "description": "No timestamp samples observed",
+        }
+
+    # Clean and filter samples
+    samples = [(float(t), int(val) & 0xFFFFFFFF) for t, val in ts_samples if val is not None]
+
+    if len(samples) < 2:
+        val = samples[0][1]
+        return {
+            "class": "SINGLE_SAMPLE",
+            "rate": None,
+            "uptime_seconds": None,
+            "uptime_str": None,
+            "scores": {},
+            "reason": f"TCP timestamp TSval={val} observed (single probe, frequency unmeasured)",
+            "description": f"Single sample TSval={val}",
+        }
+
+    # Calculate intervals
+    rates = []
+    has_large_jump = False
+
+    for i in range(1, len(samples)):
+        dt = samples[i][0] - samples[i - 1][0]
+        if dt <= 0:
+            continue
+        # 32-bit modular delta
+        d_ts = (samples[i][1] - samples[i - 1][1]) % (2**32)
+
+        # Check for RFC 7323 cryptographic randomization or backward jump
+        # On randomized stacks (like Apple Darwin), jumps are typically > 10,000,000
+        if d_ts > 10000000 or (d_ts / dt) > 100000:
+            has_large_jump = True
+            break
+        rates.append(d_ts / dt)
+
+    if has_large_jump or not rates:
+        # Apple Darwin / iOS 15+ / iPadOS 17+ / modern BSD randomized offset
+        return {
+            "class": "RANDOM_OFFSET",
+            "rate": None,
+            "uptime_seconds": None,
+            "uptime_str": None,
+            "scores": {"macOS / BSD": 2.5},
+            "reason": "TCP timestamp uses randomized initial offsets (RFC 7323, characteristic of Apple Darwin / iOS / macOS)",
+            "description": "Randomized Initial Offset (RFC 7323 Darwin PRNG)",
+        }
+
+    avg_rate = sum(rates) / len(rates)
+    latest_tsval = samples[-1][1]
+
+    # Classify clock frequency
+    if 700 <= avg_rate <= 1400:
+        cls_name = "HZ_1000"
+        scores = {"Windows": 2.0, "Linux": 1.0}
+        desc = f"~1000 Hz ({avg_rate:.1f} Hz)"
+        reason = f"TCP timestamp clock frequency ~{avg_rate:.1f} Hz matches modern Windows 10/11 (1000 Hz / 1ms tick) or Linux low-latency"
+    elif 180 <= avg_rate <= 350:
+        cls_name = "HZ_250"
+        scores = {"Linux": 2.5}
+        desc = f"~250 Hz ({avg_rate:.1f} Hz)"
+        reason = f"TCP timestamp clock frequency ~{avg_rate:.1f} Hz matches standard Linux (CONFIG_HZ=250)"
+    elif 70 <= avg_rate <= 150:
+        cls_name = "HZ_100"
+        scores = {"Linux": 1.5, "Windows": 1.0}
+        desc = f"~100 Hz ({avg_rate:.1f} Hz)"
+        reason = f"TCP timestamp clock frequency ~{avg_rate:.1f} Hz matches 100 Hz timer (traditional Linux / classic Windows)"
+    elif 5 <= avg_rate <= 25:
+        cls_name = "HZ_10"
+        scores = {"Windows": 2.0}
+        desc = f"~10 Hz ({avg_rate:.1f} Hz)"
+        reason = f"TCP timestamp clock frequency ~{avg_rate:.1f} Hz matches legacy Windows 10 Hz timer"
+    else:
+        cls_name = "HZ_OTHER"
+        scores = {}
+        desc = f"{avg_rate:.1f} Hz"
+        reason = f"TCP timestamp clock frequency ~{avg_rate:.1f} Hz"
+
+    # Uptime estimation
+    uptime_sec = latest_tsval / avg_rate if avg_rate > 0 else 0
+    # Sanity check: if uptime is under 365 days, format it; if astronomical, it might have an offset
+    if 0 < uptime_sec < (365 * 86400):
+        uptime_str = _format_uptime(uptime_sec)
+    else:
+        uptime_str = f"> 1 year or offset ({int(uptime_sec // 86400)} days)"
+
+    return {
+        "class": cls_name,
+        "rate": avg_rate,
+        "uptime_seconds": uptime_sec,
+        "uptime_str": uptime_str,
+        "scores": scores,
+        "reason": reason,
+        "description": desc,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main engine
 # ---------------------------------------------------------------------------
 
-def fingerprint(info, banners=None, ip_ids=None):
+def fingerprint(info, banners=None, ip_ids=None, ts_samples=None):
     """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST)
-    with optional cross-layer application banner correlation (Idea 7.1)
-    and multi-probe IP ID sequence tracking (Idea 2).
+    with optional cross-layer application banner correlation (Idea 7.1),
+    multi-probe IP ID sequence tracking (Idea 2), and TCP timestamp clock/uptime
+    analysis (Idea 3).
 
     The returned dict keeps the keys the previous engine exposed
     (os, confidence, version, ttl, window, options, reasons) so existing
@@ -569,6 +712,10 @@ def fingerprint(info, banners=None, ip_ids=None):
         ip_id_sequence : list of IP IDs observed across scan probes
         ip_id_class  : sequence generation classification (ALL_ZERO, STRICT_INCREMENTAL, etc.)
         ip_id_deltas : consecutive modular deltas
+        ts_rate      : estimated TCP timestamp clock rate in Hz
+        ts_class     : clock rate archetype (HZ_1000, HZ_250, RANDOM_OFFSET, etc.)
+        uptime       : estimated human-readable system uptime
+        uptime_seconds : raw estimated uptime in seconds
         probe_type   : 'SYN/ACK' or 'RST'
         banners      : input application banners
         banner_evidence : list of correlated banner signatures
@@ -580,6 +727,9 @@ def fingerprint(info, banners=None, ip_ids=None):
 
     if ip_ids is None:
         ip_ids = info.get("ip_ids")
+
+    if ts_samples is None:
+        ts_samples = info.get("ts_samples")
 
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
@@ -712,6 +862,13 @@ def fingerprint(info, banners=None, ip_ids=None):
         scores[cls] += s
     reasons.extend(banner_reasons)
 
+    # --- Feature: TCP Timestamp Clock Frequency & Uptime Analysis (Idea 3)
+    ts_analysis = analyze_tcp_timestamps(ts_samples)
+    for cls, s in ts_analysis["scores"].items():
+        scores[cls] += s
+    if ts_analysis["reason"]:
+        reasons.append(ts_analysis["reason"])
+
     # --- Turn raw scores into a probability distribution. -------------------
     total = sum(scores.values())
     if total <= 0:
@@ -788,6 +945,10 @@ def fingerprint(info, banners=None, ip_ids=None):
         "ip_id_sequence": ip_ids_list,
         "ip_id_class": ipid_res["class"],
         "ip_id_deltas": ipid_res["deltas"],
+        "ts_rate": ts_analysis["rate"],
+        "ts_class": ts_analysis["class"],
+        "uptime": ts_analysis["uptime_str"],
+        "uptime_seconds": ts_analysis["uptime_seconds"],
         "probe_type": "RST" if is_rst else "SYN/ACK",
         "options": options,
         "banners": banners,

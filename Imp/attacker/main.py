@@ -41,7 +41,7 @@ import random
 import time
 
 from common.packet import (
-    build_syn_frame, parse_ipv4_tcp_frame, TCP_ACK, TCP_RST, TCP_SYN,
+    build_syn_frame, parse_ipv4_tcp_frame, parse_tcp_options, TCP_ACK, TCP_RST, TCP_SYN,
     STANDARD_SYN_OPTIONS,
 )
 from common.npcap import Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
@@ -99,9 +99,11 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                 if raw is None:
                     continue
 
+                recv_time = time.monotonic()
                 info = parse_ipv4_tcp_frame(raw)
                 if not info:
                     continue
+                info["recv_time"] = recv_time
 
                 if not (
                     info["src_ip"] == args.target
@@ -144,6 +146,60 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
     ip_ids = [res["ip_id"] for _, _, res in observations if res and "ip_id" in res]
     if fingerprint_candidate:
         fingerprint_candidate["ip_ids"] = ip_ids
+
+    # Collect TCP Timestamp samples across probes (Idea 3)
+    ts_samples = []
+    open_port_candidate = None
+    for p, s, res in observations:
+        if res and res.get("options"):
+            opts = parse_tcp_options(res["options"])
+            for opt in opts:
+                if opt[0] == "TIMESTAMP":
+                    ts_samples.append((res.get("recv_time", time.monotonic()), opt[1]))
+                    if s == "OPEN":
+                        open_port_candidate = p
+
+    # If only 1 timestamp sample is available and an open port exists,
+    # send a follow-up probe after a brief pause to measure clock frequency
+    if len(ts_samples) == 1 and open_port_candidate is not None:
+        followup_port = open_port_candidate
+        followup_src_port = args.source_port + len(args.ports) + 5
+        time.sleep(0.5)
+        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as follow_cap:
+            follow_seq = rng.randrange(1, 0xFFFFFFFF)
+            follow_frame = build_syn_frame(
+                src_mac, dst_mac,
+                local_ip, args.target,
+                followup_src_port, followup_port,
+                follow_seq,
+                options=STANDARD_SYN_OPTIONS,
+            )
+            f_sent = time.monotonic()
+            follow_cap.send(follow_frame)
+            f_deadline = f_sent + args.timeout
+            while time.monotonic() < f_deadline:
+                f_raw = follow_cap.recv()
+                if not f_raw:
+                    continue
+                f_recv_time = time.monotonic()
+                f_info = parse_ipv4_tcp_frame(f_raw)
+                if not f_info:
+                    continue
+                if (
+                    f_info["src_ip"] == args.target
+                    and f_info["dst_ip"] == local_ip
+                    and f_info["src_port"] == followup_port
+                    and f_info["dst_port"] == followup_src_port
+                ):
+                    if f_info.get("options"):
+                        f_opts = parse_tcp_options(f_info["options"])
+                        for opt in f_opts:
+                            if opt[0] == "TIMESTAMP":
+                                ts_samples.append((f_recv_time, opt[1]))
+                    break
+
+    if fingerprint_candidate:
+        fingerprint_candidate["ts_samples"] = ts_samples
 
     return observations, fingerprint_candidate
 
@@ -200,6 +256,13 @@ def phase3_fingerprint(fingerprint_candidate, banner_results=None):
     elif fp.get("ip_id") is not None:
         print(f"  IP ID      : {fp['ip_id']}")
     print(f"  Options    : {', '.join(str(x) for x in fp['options']) or 'none'}")
+    if fp.get("ts_class") and fp["ts_class"] != "NONE":
+        if fp["ts_class"] == "RANDOM_OFFSET":
+            print("  Timestamp  : Clock Rate: Randomized offset (RFC 7323 Darwin PRNG)")
+        elif fp.get("ts_rate") is not None:
+            print(f"  Timestamp  : Clock Rate: ~{fp['ts_rate']:.1f} Hz ({fp['ts_class']})")
+            if fp.get("uptime"):
+                print(f"  Uptime     : ~{fp['uptime']}")
     if fp.get("banner_evidence"):
         print(f"  Cross-Layer: {len(fp['banner_evidence'])} banner signature(s) correlated")
     print(f"  Probability:")

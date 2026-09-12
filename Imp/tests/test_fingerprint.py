@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))                 # for `common` package
 sys.path.insert(0, str(ROOT / "attacker"))    # for `fingerprint` module
 
-from fingerprint import fingerprint, normalise_ttl, classify_ipid_sequence
+from fingerprint import (
+    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps
+)
 from common.packet import TCP_RST, TCP_SYN, TCP_ACK
 
 
@@ -270,6 +272,62 @@ class IpIdSequenceTrackingTests(unittest.TestCase):
         self.assertEqual(res["class"], "CONSTANT_NONZERO")
         self.assertEqual(res["deltas"], [0, 0])
         self.assertGreater(res["scores"].get("Network device", 0), 0)
+
+
+class TcpTimestampClockTests(unittest.TestCase):
+    def test_1000hz_clock_rate_boosts_windows(self):
+        # 1000 ticks in 1.0 second -> 1000 Hz
+        ts_samples = [(100.0, 1000000), (101.0, 1001000)]
+        res = analyze_tcp_timestamps(ts_samples)
+        self.assertEqual(res["class"], "HZ_1000")
+        self.assertAlmostEqual(res["rate"], 1000.0, delta=1.0)
+        self.assertGreater(res["scores"].get("Windows", 0), 0)
+        self.assertTrue(any("1000 Hz" in res["reason"] for _ in [1]))
+
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        synack["ts_samples"] = ts_samples
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ts_class"], "HZ_1000")
+        self.assertIsNotNone(fp["uptime"])
+
+    def test_250hz_clock_rate_boosts_linux(self):
+        # 250 ticks in 1.0 second -> 250 Hz
+        ts_samples = [(200.0, 500000), (201.0, 500250)]
+        res = analyze_tcp_timestamps(ts_samples)
+        self.assertEqual(res["class"], "HZ_250")
+        self.assertAlmostEqual(res["rate"], 250.0, delta=1.0)
+        self.assertGreater(res["scores"].get("Linux", 0), 0)
+        self.assertTrue(any("CONFIG_HZ=250" in res["reason"] for _ in [1]))
+
+    def test_randomized_offsets_boosts_darwin(self):
+        # Large jump (> 10,000,000) characteristic of iOS / Darwin RFC 7323
+        ts_samples = [(300.0, 1287455648), (300.8, 781575066)]
+        res = analyze_tcp_timestamps(ts_samples)
+        self.assertEqual(res["class"], "RANDOM_OFFSET")
+        self.assertGreater(res["scores"].get("macOS / BSD", 0), 0)
+        self.assertTrue(any("randomized" in res["reason"] for _ in [1]))
+
+        synack = _synack(64, 65535, b"", df=True)
+        synack["ts_samples"] = ts_samples
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ts_class"], "RANDOM_OFFSET")
+        self.assertEqual(fp["distribution"][0][0], "macOS / BSD")
+
+    def test_uptime_calculation_formatting(self):
+        # Rate = 1000 Hz, TSval = 2667146 -> 2667.1s -> 44 min
+        ts_samples = [(10.0, 2666146), (11.0, 2667146)]
+        res = analyze_tcp_timestamps(ts_samples)
+        self.assertEqual(res["class"], "HZ_1000")
+        self.assertIn("44 min(s)", res["uptime_str"])
+
+    def test_single_or_missing_timestamp_graceful_fallback(self):
+        res_empty = analyze_tcp_timestamps([])
+        self.assertEqual(res_empty["class"], "NONE")
+        self.assertIsNone(res_empty["rate"])
+
+        res_single = analyze_tcp_timestamps([(10.0, 50000)])
+        self.assertEqual(res_single["class"], "SINGLE_SAMPLE")
+        self.assertIsNone(res_single["rate"])
 
 
 if __name__ == "__main__":
