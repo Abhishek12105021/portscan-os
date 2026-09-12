@@ -112,7 +112,10 @@ def scan(args):
 
             time.sleep(args.delay)
 
+    # Collect all IP IDs observed during the scan probes (Idea 2)
+    ip_ids = [res["ip_id"] for _, _, res in observations if res and "ip_id" in res]
     if fingerprint_candidate:
+        fingerprint_candidate["ip_ids"] = ip_ids
         fp = fingerprint(fingerprint_candidate)
 
         candidate_type = "Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK"
@@ -129,7 +132,11 @@ def scan(args):
               f"~{fp['hops']} hop(s))")
         print(f"Window      : {fp['window']}")
         print(f"DF bit      : {'set' if fp['df'] else 'clear'}")
-        if fp.get("ip_id") is not None:
+        if fp.get("ip_id_sequence") and len(fp["ip_id_sequence"]) > 1:
+            deltas_str = str(fp.get("ip_id_deltas", []))
+            print(f"IP ID Seq   : {fp['ip_id_sequence']} (deltas: {deltas_str})")
+            print(f"IP ID Class : {fp.get('ip_id_class', 'UNKNOWN')}")
+        elif fp.get("ip_id") is not None:
             print(f"IP ID       : {fp['ip_id']}")
         print("Options     :", ", ".join(str(x) for x in fp["options"]) or "none")
         print("Probability distribution:")

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))                 # for `common` package
 sys.path.insert(0, str(ROOT / "attacker"))    # for `fingerprint` module
 
-from fingerprint import fingerprint, normalise_ttl
+from fingerprint import fingerprint, normalise_ttl, classify_ipid_sequence
 from common.packet import TCP_RST, TCP_SYN, TCP_ACK
 
 
@@ -230,6 +230,46 @@ class BannerCrossLayerTests(unittest.TestCase):
         ]
         fp = fingerprint(synack, banners=banners)
         self.assertTrue(any("precedes 'Date'" in r for r in fp["reasons"]))
+
+
+class IpIdSequenceTrackingTests(unittest.TestCase):
+    def test_all_zero_sequence_boosts_linux(self):
+        synack = _synack(64, 29200, LINUX_OPTS, df=True)
+        synack["ip_ids"] = [0, 0, 0, 0]
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ip_id_class"], "ALL_ZERO")
+        self.assertEqual(fp["ip_id_sequence"], [0, 0, 0, 0])
+        self.assertEqual(fp["distribution"][0][0], "Linux")
+        self.assertTrue(any("constant zero" in r for r in fp["reasons"]))
+
+    def test_strict_incremental_sequence_boosts_windows(self):
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        synack["ip_ids"] = [25714, 25715, 25716, 25718]
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ip_id_class"], "STRICT_INCREMENTAL")
+        self.assertEqual(fp["ip_id_deltas"], [1, 1, 2])
+        self.assertEqual(fp["distribution"][0][0], "Windows")
+        self.assertTrue(any("strictly incremental" in r for r in fp["reasons"]))
+
+    def test_broken_incremental_sequence(self):
+        res = classify_ipid_sequence([1000, 1050, 1200], df=True)
+        self.assertEqual(res["class"], "BROKEN_INCREMENTAL")
+        self.assertEqual(res["deltas"], [50, 150])
+        self.assertGreater(res["scores"].get("Windows", 0), 0)
+
+    def test_random_sequence_darwin_bsd(self):
+        synack = _synack(64, 65535, b"", df=True)
+        synack["ip_ids"] = [0, 54248]
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ip_id_class"], "RANDOM_POSITIVE")
+        self.assertEqual(fp["ip_id_deltas"], [54248])
+        self.assertTrue(any("randomized" in r for r in fp["reasons"]))
+
+    def test_constant_nonzero_sequence(self):
+        res = classify_ipid_sequence([0x1234, 0x1234, 0x1234], df=False)
+        self.assertEqual(res["class"], "CONSTANT_NONZERO")
+        self.assertEqual(res["deltas"], [0, 0])
+        self.assertGreater(res["scores"].get("Network device", 0), 0)
 
 
 if __name__ == "__main__":

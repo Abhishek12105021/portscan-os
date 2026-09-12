@@ -420,12 +420,143 @@ def _orders_match(observed, reference):
 
 
 # ---------------------------------------------------------------------------
+# IP ID Sequence Generation Analysis (Idea 2)
+# ---------------------------------------------------------------------------
+
+def classify_ipid_sequence(ip_ids, df=True):
+    """
+    Classify a sequence of 16-bit IPv4 Identification (IP ID) values across multiple probes.
+
+    Pattern Archetypes:
+      - ALL_ZERO: All packets have IP ID == 0 (RFC 6864, Linux standard when DF=1)
+      - CONSTANT_NONZERO: All packets have identical non-zero ID (embedded/switches)
+      - STRICT_INCREMENTAL: Small consecutive step deltas (1 <= delta <= 10, classic Windows/legacy)
+      - BROKEN_INCREMENTAL: Moderate positive steps (1 <= delta <= 1000, Windows with background traffic)
+      - RANDOM_POSITIVE: Wide pseudorandom variation or jumps (modern Windows per-socket pools or Darwin BSD)
+
+    Returns:
+        dict with:
+            'class': str ('ALL_ZERO', 'STRICT_INCREMENTAL', 'BROKEN_INCREMENTAL',
+                          'RANDOM_POSITIVE', 'CONSTANT_NONZERO', 'SINGLE_SAMPLE', or 'UNKNOWN')
+            'deltas': list of int
+            'scores': dict of {os_class: float}
+            'reason': str or None
+            'description': str
+    """
+    if not ip_ids:
+        return {
+            "class": "UNKNOWN",
+            "deltas": [],
+            "scores": {},
+            "reason": None,
+            "description": "No IP ID observations",
+        }
+
+    # Ensure all values are 16-bit unsigned ints
+    clean_ids = [int(x) & 0xFFFF for x in ip_ids]
+
+    if len(clean_ids) == 1:
+        val = clean_ids[0]
+        if df and val == 0:
+            return {
+                "class": "ALL_ZERO",
+                "deltas": [],
+                "scores": {"Linux": 1.5},
+                "reason": "IP ID is 0 with DF set (RFC 6864, characteristic of Linux)",
+                "description": "Single sample IP ID=0 (RFC 6864)",
+            }
+        elif df and val > 0:
+            return {
+                "class": "RANDOM_POSITIVE",
+                "deltas": [],
+                "scores": {"Windows": 0.8, "macOS / BSD": 0.4},
+                "reason": f"IP ID is non-zero ({val}) with DF set (characteristic of Windows/BSD)",
+                "description": f"Single sample non-zero ({val})",
+            }
+        else:
+            return {
+                "class": "SINGLE_SAMPLE",
+                "deltas": [],
+                "scores": {},
+                "reason": f"IP ID is {val} (DF bit clear)",
+                "description": f"Single sample ({val})",
+            }
+
+    # Calculate 16-bit modular deltas: (id[i] - id[i-1]) mod 65536
+    deltas = [(clean_ids[i] - clean_ids[i - 1]) % 65536 for i in range(1, len(clean_ids))]
+
+    # Pattern 1: Constant Zero (Linux RFC 6864)
+    if all(x == 0 for x in clean_ids):
+        if df:
+            scores = {"Linux": 2.5}
+            reason = f"IP ID sequence is constant zero {clean_ids} with DF set (RFC 6864, strong Linux indicator)"
+        else:
+            scores = {"Linux": 1.5}
+            reason = f"IP ID sequence is constant zero {clean_ids}"
+        return {
+            "class": "ALL_ZERO",
+            "deltas": deltas,
+            "scores": scores,
+            "reason": reason,
+            "description": "Constant Zero (RFC 6864)",
+        }
+
+    # Pattern 2: Constant Non-zero (Embedded / Network Device)
+    if all(x == clean_ids[0] for x in clean_ids) and clean_ids[0] > 0:
+        return {
+            "class": "CONSTANT_NONZERO",
+            "deltas": deltas,
+            "scores": {"Network device": 2.5, "macOS / BSD": 0.5},
+            "reason": f"IP ID sequence is constant non-zero ({clean_ids[0]}) (common in network appliances)",
+            "description": f"Constant Non-zero ({clean_ids[0]})",
+        }
+
+    # Pattern 3: Strictly Incremental (1 <= delta <= 10)
+    if all(1 <= d <= 10 for d in deltas):
+        avg_d = sum(deltas) / len(deltas)
+        scores = {"Windows": 2.5, "Network device": 1.0, "macOS / BSD": 0.5}
+        reason = f"IP ID sequence is strictly incremental (deltas: {deltas}, avg: {avg_d:.1f}) (Windows sequential/global counter)"
+        return {
+            "class": "STRICT_INCREMENTAL",
+            "deltas": deltas,
+            "scores": scores,
+            "reason": reason,
+            "description": f"Strictly Incremental (avg delta: {avg_d:.1f})",
+        }
+
+    # Pattern 4: Broken / Drifted Incremental (1 <= delta <= 1000)
+    if all(1 <= d <= 1000 for d in deltas):
+        avg_d = sum(deltas) / len(deltas)
+        scores = {"Windows": 2.0, "Network device": 1.0, "macOS / BSD": 0.5}
+        reason = f"IP ID sequence is incremental with traffic drift (deltas: {deltas}, avg: {avg_d:.1f}) (Windows counter under background traffic)"
+        return {
+            "class": "BROKEN_INCREMENTAL",
+            "deltas": deltas,
+            "scores": scores,
+            "reason": reason,
+            "description": f"Incremental with Drift (avg delta: {avg_d:.1f})",
+        }
+
+    # Pattern 5: Randomized / Large Jumps (Darwin BSD / Modern Windows per-socket pool)
+    scores = {"Windows": 1.5, "macOS / BSD": 1.5}
+    reason = f"IP ID sequence is randomized non-zero (deltas: {deltas}) (characteristic of modern Windows per-socket pool or Darwin/BSD)"
+    return {
+        "class": "RANDOM_POSITIVE",
+        "deltas": deltas,
+        "scores": scores,
+        "reason": reason,
+        "description": "Randomized Non-zero",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main engine
 # ---------------------------------------------------------------------------
 
-def fingerprint(info, banners=None):
+def fingerprint(info, banners=None, ip_ids=None):
     """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST)
-    with optional cross-layer application banner correlation (Idea 7.1).
+    with optional cross-layer application banner correlation (Idea 7.1)
+    and multi-probe IP ID sequence tracking (Idea 2).
 
     The returned dict keeps the keys the previous engine exposed
     (os, confidence, version, ttl, window, options, reasons) so existing
@@ -434,7 +565,10 @@ def fingerprint(info, banners=None):
         initial_ttl  : normalised initial TTL
         hops         : estimated router hops to the target
         df           : Don't-Fragment bit observed
-        ip_id        : IPv4 identification field
+        ip_id        : IPv4 identification field of primary candidate
+        ip_id_sequence : list of IP IDs observed across scan probes
+        ip_id_class  : sequence generation classification (ALL_ZERO, STRICT_INCREMENTAL, etc.)
+        ip_id_deltas : consecutive modular deltas
         probe_type   : 'SYN/ACK' or 'RST'
         banners      : input application banners
         banner_evidence : list of correlated banner signatures
@@ -443,6 +577,9 @@ def fingerprint(info, banners=None):
         banners = info.get("banners", [])
     if isinstance(banners, dict):
         banners = [banners]
+
+    if ip_ids is None:
+        ip_ids = info.get("ip_ids")
 
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
@@ -559,17 +696,15 @@ def fingerprint(info, banners=None):
         if wscale is not None:
             reasons.append(f"window scale={wscale}")
 
-    # --- Feature: IPv4 Identification (RFC 6864 heuristic).
+    # --- Feature: IPv4 Identification (RFC 6864 & Multi-probe Tracking - Idea 2)
     # Linux kernels zero out the IP ID field when DF is set on atomic datagrams.
     # Windows and BSD stacks traditionally generate non-zero or incremental IDs.
-    if ip_id is not None:
-        if df and ip_id == 0:
-            scores["Linux"] += 1.5
-            reasons.append("IP ID is 0 with DF set (RFC 6864, characteristic of Linux)")
-        elif df and ip_id > 0:
-            scores["Windows"] += 0.8
-            scores["macOS / BSD"] += 0.4
-            reasons.append(f"IP ID is non-zero ({ip_id}) with DF set (characteristic of Windows/BSD)")
+    ip_ids_list = list(ip_ids) if ip_ids is not None else ([ip_id] if ip_id is not None else [])
+    ipid_res = classify_ipid_sequence(ip_ids_list, df=df)
+    for cls, s in ipid_res["scores"].items():
+        scores[cls] += s
+    if ipid_res["reason"]:
+        reasons.append(ipid_res["reason"])
 
     # --- Feature: Cross-layer Application Banner Correlation (Idea 7.1)
     banner_scores, banner_reasons, banner_evidence, banner_tier_hint = _evaluate_banners(banners)
@@ -650,6 +785,9 @@ def fingerprint(info, banners=None):
         "window": window,
         "df": df,
         "ip_id": ip_id,
+        "ip_id_sequence": ip_ids_list,
+        "ip_id_class": ipid_res["class"],
+        "ip_id_deltas": ipid_res["deltas"],
         "probe_type": "RST" if is_rst else "SYN/ACK",
         "options": options,
         "banners": banners,
