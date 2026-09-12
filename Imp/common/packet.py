@@ -81,17 +81,16 @@ def build_ipv4(src_ip: str, dst_ip: str, tcp_segment: bytes,
 
 def build_tcp(src_ip: str, dst_ip: str, src_port: int, dst_port: int,
               sequence: int, window: int = 64240,
-              options: bytes = b"") -> bytes:
+              options: bytes = b"", flags: int = TCP_SYN) -> bytes:
     if len(options) % 4:
         raise ValueError("TCP options must be a multiple of 4 bytes")
 
     data_offset = 5 + len(options) // 4
-    flags = TCP_SYN
     ack = 0
     checksum = 0
     urgent = 0
 
-    offset_flags = (data_offset << 12) | flags
+    offset_flags = (data_offset << 12) | (flags & 0x01FF)
 
     header = struct.pack(
         "!HHLLHHHH",
@@ -128,14 +127,31 @@ def build_syn_frame(src_mac: str, dst_mac: str,
                     src_ip: str, dst_ip: str,
                     src_port: int, dst_port: int,
                     sequence: int, ttl: int = 64,
-                    options: bytes = b"") -> bytes:
+                    options: bytes = b"",
+                    flags: int = TCP_SYN) -> bytes:
     tcp = build_tcp(
-        src_ip, dst_ip, src_port, dst_port, sequence, options=options
+        src_ip, dst_ip, src_port, dst_port, sequence, options=options, flags=flags
     )
     ip = build_ipv4(
         src_ip, dst_ip, tcp, identification=sequence & 0xFFFF, ttl=ttl
     )
     return build_ethernet(dst_mac, src_mac, ip)
+
+
+def build_ecn_syn_frame(src_mac: str, dst_mac: str,
+                        src_ip: str, dst_ip: str,
+                        src_port: int, dst_port: int,
+                        sequence: int, ttl: int = 64,
+                        options: bytes = STANDARD_SYN_OPTIONS) -> bytes:
+    """Builds an RFC 3168 ECN probe frame (TCP SYN with ECE and CWR flags set)."""
+    return build_syn_frame(
+        src_mac=src_mac, dst_mac=dst_mac,
+        src_ip=src_ip, dst_ip=dst_ip,
+        src_port=src_port, dst_port=dst_port,
+        sequence=sequence, ttl=ttl,
+        options=options,
+        flags=TCP_SYN | TCP_ECE | TCP_CWR,
+    )
 
 
 def parse_ethernet(frame: bytes):

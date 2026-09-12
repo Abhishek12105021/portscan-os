@@ -41,7 +41,7 @@ import random
 import time
 
 from common.packet import (
-    build_syn_frame, parse_ipv4_tcp_frame, parse_tcp_options, TCP_ACK, TCP_RST, TCP_SYN,
+    build_syn_frame, build_ecn_syn_frame, parse_ipv4_tcp_frame, parse_tcp_options, TCP_ACK, TCP_RST, TCP_SYN,
     STANDARD_SYN_OPTIONS,
 )
 from common.npcap import Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
@@ -159,12 +159,72 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                     if s == "OPEN":
                         open_port_candidate = p
 
+    # RFC 3168 ECN Probe (Idea 4) & Clock Measurement
+    ecn_info = {"tested": False}
+    if open_port_candidate is not None:
+        ecn_port = open_port_candidate
+        ecn_src_port = random.randint(45000, 60000)
+        time.sleep(0.4)
+        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as ecn_cap:
+            ecn_seq = rng.randrange(1, 0xFFFFFFFF)
+            ecn_frame = build_ecn_syn_frame(
+                src_mac, dst_mac,
+                local_ip, args.target,
+                ecn_src_port, ecn_port,
+                ecn_seq,
+                options=STANDARD_SYN_OPTIONS,
+            )
+            e_sent = time.monotonic()
+            ecn_cap.send(ecn_frame)
+            e_deadline = e_sent + args.timeout
+            ecn_responded = False
+            while time.monotonic() < e_deadline:
+                e_raw = ecn_cap.recv()
+                if not e_raw:
+                    continue
+                e_recv_time = time.monotonic()
+                e_info = parse_ipv4_tcp_frame(e_raw)
+                if not e_info:
+                    continue
+                if (
+                    e_info["src_ip"] == args.target
+                    and e_info["dst_ip"] == local_ip
+                    and e_info["src_port"] == ecn_port
+                    and e_info["dst_port"] == ecn_src_port
+                ):
+                    ecn_responded = True
+                    ecn_info = {
+                        "tested": True,
+                        "flags": e_info["flags"],
+                        "ttl": e_info["ttl"],
+                        "window": e_info["window"],
+                        "dropped": False,
+                    }
+                    if "ip_id" in e_info:
+                        ip_ids.append(e_info["ip_id"])
+                    if e_info.get("options"):
+                        e_opts = parse_tcp_options(e_info["options"])
+                        for opt in e_opts:
+                            if opt[0] == "TIMESTAMP":
+                                ts_samples.append((e_recv_time, opt[1]))
+                    break
+            if not ecn_responded:
+                ecn_info = {
+                    "tested": True,
+                    "dropped": True,
+                }
+    else:
+        ecn_info = {
+            "tested": False,
+            "reason": "No open port observed for ECN negotiation",
+        }
+
     # If only 1 timestamp sample is available and an open port exists,
-    # send a follow-up probe after a brief pause to measure clock frequency
+    # send a follow-up standard probe to measure clock frequency
     if len(ts_samples) == 1 and open_port_candidate is not None:
         followup_port = open_port_candidate
-        followup_src_port = args.source_port + len(args.ports) + 5
-        time.sleep(0.5)
+        followup_src_port = random.randint(45000, 60000)
+        time.sleep(0.4)
         with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as follow_cap:
             follow_seq = rng.randrange(1, 0xFFFFFFFF)
             follow_frame = build_syn_frame(
@@ -191,6 +251,8 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                     and f_info["src_port"] == followup_port
                     and f_info["dst_port"] == followup_src_port
                 ):
+                    if "ip_id" in f_info:
+                        ip_ids.append(f_info["ip_id"])
                     if f_info.get("options"):
                         f_opts = parse_tcp_options(f_info["options"])
                         for opt in f_opts:
@@ -199,7 +261,9 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                     break
 
     if fingerprint_candidate:
+        fingerprint_candidate["ip_ids"] = ip_ids
         fingerprint_candidate["ts_samples"] = ts_samples
+        fingerprint_candidate["ecn_info"] = ecn_info
 
     return observations, fingerprint_candidate
 
@@ -263,6 +327,15 @@ def phase3_fingerprint(fingerprint_candidate, banner_results=None):
             print(f"  Timestamp  : Clock Rate: ~{fp['ts_rate']:.1f} Hz ({fp['ts_class']})")
             if fp.get("uptime"):
                 print(f"  Uptime     : ~{fp['uptime']}")
+    if fp.get("ecn_status") and fp["ecn_status"] != "NOT_TESTED":
+        if fp["ecn_status"] == "ECN_SUPPORTED":
+            print(f"  ECN Probe  : Supported (ECE reflected: True, Flags: 0x{fp.get('ecn_flags', 0):02x}) [RFC 3168]")
+        elif fp["ecn_status"] == "ECN_IGNORED":
+            print(f"  ECN Probe  : Ignored / Not Negotiated (ECE reflected: False, Flags: 0x{fp.get('ecn_flags', 0):02x}) [Default Windows Stack]")
+        elif fp["ecn_status"] == "ECN_DROPPED":
+            print("  ECN Probe  : Dropped / Blocked by Firewall")
+        else:
+            print(f"  ECN Probe  : {fp['ecn_status']} (Flags: 0x{fp.get('ecn_flags', 0):02x})")
     if fp.get("banner_evidence"):
         print(f"  Cross-Layer: {len(fp['banner_evidence'])} banner signature(s) correlated")
     print(f"  Probability:")

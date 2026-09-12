@@ -29,7 +29,7 @@ percentages so the caller sees a ranked distribution, not just one label.
 
 import re
 
-from common.packet import parse_tcp_options, TCP_RST, TCP_SYN, TCP_ACK
+from common.packet import parse_tcp_options, TCP_RST, TCP_SYN, TCP_ACK, TCP_ECE, TCP_CWR
 
 
 # ---------------------------------------------------------------------------
@@ -692,14 +692,124 @@ def analyze_tcp_timestamps(ts_samples):
 
 
 # ---------------------------------------------------------------------------
+# RFC 3168 Explicit Congestion Notification (ECN) Probe Analysis (Idea 4)
+# ---------------------------------------------------------------------------
+
+def evaluate_ecn(ecn_info):
+    """
+    Evaluate server response to an active RFC 3168 ECN probe (SYN with ECE and CWR set).
+
+    Parameters:
+        ecn_info (dict or None): Dictionary describing the ECN probe outcome,
+            containing:
+              - 'tested': bool
+              - 'flags': int (response TCP flags)
+              - 'dropped': bool (optional)
+              - 'reason': str (optional)
+            or None if no probe was performed.
+
+    Returns:
+        dict with:
+            'status': str ('ECN_SUPPORTED', 'ECN_IGNORED', 'ECN_DROPPED',
+                           'ECN_REJECTED_RST', or 'NOT_TESTED')
+            'flags': int or None
+            'ece_reflected': bool
+            'cwr_reflected': bool
+            'scores': dict of {os_class: float}
+            'reason': str or None
+            'description': str
+    """
+    if not ecn_info or not ecn_info.get("tested"):
+        return {
+            "status": "NOT_TESTED",
+            "flags": None,
+            "ece_reflected": False,
+            "cwr_reflected": False,
+            "scores": {},
+            "reason": None,
+            "description": "ECN probe not performed (no open port or disabled)",
+        }
+
+    if ecn_info.get("dropped"):
+        return {
+            "status": "ECN_DROPPED",
+            "flags": None,
+            "ece_reflected": False,
+            "cwr_reflected": False,
+            "scores": {"Network device": 2.0},
+            "reason": "ECN probe dropped without response (typical of strict firewall or legacy network filter)",
+            "description": "ECN probe dropped",
+        }
+
+    flags = ecn_info.get("flags", 0)
+    ece = bool(flags & TCP_ECE)
+    cwr = bool(flags & TCP_CWR)
+
+    if flags & TCP_RST:
+        return {
+            "status": "ECN_REJECTED_RST",
+            "flags": flags,
+            "ece_reflected": ece,
+            "cwr_reflected": cwr,
+            "scores": {"Network device": 1.5, "Linux": 0.5},
+            "reason": f"ECN probe rejected with TCP RST (flags=0x{flags:02x})",
+            "description": "ECN probe rejected (RST)",
+        }
+
+    # Standard RFC 3168 negotiation:
+    # Server indicates ECN support by returning SYN/ACK with ECE set and CWR cleared.
+    if (flags & TCP_SYN) and (flags & TCP_ACK):
+        if ece and not cwr:
+            return {
+                "status": "ECN_SUPPORTED",
+                "flags": flags,
+                "ece_reflected": True,
+                "cwr_reflected": False,
+                "scores": {"Linux": 2.0, "macOS / BSD": 2.0},
+                "reason": "RFC 3168 ECN negotiation supported (ECE reflected, CWR=0 in SYN/ACK) -- characteristic of Linux & Apple Darwin",
+                "description": "ECN Supported (ECE reflected, Flags=0x52)",
+            }
+        elif not ece and not cwr:
+            return {
+                "status": "ECN_IGNORED",
+                "flags": flags,
+                "ece_reflected": False,
+                "cwr_reflected": False,
+                "scores": {"Windows": 2.0},
+                "reason": "RFC 3168 ECN flags ignored (ECE=0, CWR=0 in SYN/ACK) -- characteristic of default Windows TCP/IP stack",
+                "description": "ECN Ignored (Flags=0x12, Default Windows Stack)",
+            }
+        else:
+            return {
+                "status": "ECN_UNUSUAL",
+                "flags": flags,
+                "ece_reflected": ece,
+                "cwr_reflected": cwr,
+                "scores": {},
+                "reason": f"ECN probe elicited unusual TCP flag combination: 0x{flags:02x}",
+                "description": f"ECN Unusual Flags (0x{flags:02x})",
+            }
+
+    return {
+        "status": "ECN_OTHER",
+        "flags": flags,
+        "ece_reflected": ece,
+        "cwr_reflected": cwr,
+        "scores": {},
+        "reason": f"ECN probe returned unexpected response (flags=0x{flags:02x})",
+        "description": f"Flags=0x{flags:02x}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main engine
 # ---------------------------------------------------------------------------
 
-def fingerprint(info, banners=None, ip_ids=None, ts_samples=None):
+def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None):
     """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST)
     with optional cross-layer application banner correlation (Idea 7.1),
-    multi-probe IP ID sequence tracking (Idea 2), and TCP timestamp clock/uptime
-    analysis (Idea 3).
+    multi-probe IP ID sequence tracking (Idea 2), TCP timestamp clock/uptime
+    analysis (Idea 3), and active RFC 3168 ECN probe evaluation (Idea 4).
 
     The returned dict keeps the keys the previous engine exposed
     (os, confidence, version, ttl, window, options, reasons) so existing
@@ -716,6 +826,10 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None):
         ts_class     : clock rate archetype (HZ_1000, HZ_250, RANDOM_OFFSET, etc.)
         uptime       : estimated human-readable system uptime
         uptime_seconds : raw estimated uptime in seconds
+        ecn_status   : RFC 3168 ECN support classification (ECN_SUPPORTED, ECN_IGNORED, etc.)
+        ecn_flags    : response flags on ECN probe
+        ecn_reflected: whether ECE bit was reflected
+        ecn_description: summary description of ECN probe result
         probe_type   : 'SYN/ACK' or 'RST'
         banners      : input application banners
         banner_evidence : list of correlated banner signatures
@@ -730,6 +844,9 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None):
 
     if ts_samples is None:
         ts_samples = info.get("ts_samples")
+
+    if ecn_info is None:
+        ecn_info = info.get("ecn_info", info.get("ecn"))
 
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
@@ -869,6 +986,13 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None):
     if ts_analysis["reason"]:
         reasons.append(ts_analysis["reason"])
 
+    # --- Feature: Explicit Congestion Notification (RFC 3168 - Idea 4)
+    ecn_res = evaluate_ecn(ecn_info)
+    for cls, s in ecn_res["scores"].items():
+        scores[cls] += s
+    if ecn_res["reason"]:
+        reasons.append(ecn_res["reason"])
+
     # --- Turn raw scores into a probability distribution. -------------------
     total = sum(scores.values())
     if total <= 0:
@@ -949,6 +1073,10 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None):
         "ts_class": ts_analysis["class"],
         "uptime": ts_analysis["uptime_str"],
         "uptime_seconds": ts_analysis["uptime_seconds"],
+        "ecn_status": ecn_res["status"],
+        "ecn_flags": ecn_res["flags"],
+        "ecn_reflected": ecn_res["ece_reflected"],
+        "ecn_description": ecn_res["description"],
         "probe_type": "RST" if is_rst else "SYN/ACK",
         "options": options,
         "banners": banners,

@@ -10,9 +10,9 @@ sys.path.insert(0, str(ROOT))                 # for `common` package
 sys.path.insert(0, str(ROOT / "attacker"))    # for `fingerprint` module
 
 from fingerprint import (
-    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps
+    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps, evaluate_ecn
 )
-from common.packet import TCP_RST, TCP_SYN, TCP_ACK
+from common.packet import TCP_RST, TCP_SYN, TCP_ACK, TCP_ECE, TCP_CWR
 
 
 def _synack(ttl, window, options, df=True):
@@ -328,6 +328,63 @@ class TcpTimestampClockTests(unittest.TestCase):
         res_single = analyze_tcp_timestamps([(10.0, 50000)])
         self.assertEqual(res_single["class"], "SINGLE_SAMPLE")
         self.assertIsNone(res_single["rate"])
+
+
+class EcnProbeFingerprintTests(unittest.TestCase):
+    def test_ecn_supported_boosts_linux_darwin(self):
+        # SYN/ACK with ECE=1, CWR=0 (flags=0x52)
+        ecn_res = evaluate_ecn({"tested": True, "flags": TCP_SYN | TCP_ACK | TCP_ECE})
+        self.assertEqual(ecn_res["status"], "ECN_SUPPORTED")
+        self.assertTrue(ecn_res["ece_reflected"])
+        self.assertFalse(ecn_res["cwr_reflected"])
+        self.assertGreater(ecn_res["scores"].get("Linux", 0), 0)
+        self.assertGreater(ecn_res["scores"].get("macOS / BSD", 0), 0)
+
+        synack = _synack(64, 65535, LINUX_OPTS, df=True)
+        synack["ecn_info"] = {"tested": True, "flags": 0x52}
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ecn_status"], "ECN_SUPPORTED")
+        self.assertTrue(fp["ecn_reflected"])
+        self.assertTrue(any("RFC 3168 ECN negotiation supported" in r for r in fp["reasons"]))
+
+    def test_ecn_ignored_boosts_windows(self):
+        # Standard SYN/ACK with ECE=0, CWR=0 (flags=0x12)
+        ecn_res = evaluate_ecn({"tested": True, "flags": TCP_SYN | TCP_ACK})
+        self.assertEqual(ecn_res["status"], "ECN_IGNORED")
+        self.assertFalse(ecn_res["ece_reflected"])
+        self.assertGreater(ecn_res["scores"].get("Windows", 0), 0)
+
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        synack["ecn_info"] = {"tested": True, "flags": 0x12}
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ecn_status"], "ECN_IGNORED")
+        self.assertFalse(fp["ecn_reflected"])
+        self.assertTrue(any("RFC 3168 ECN flags ignored" in r for r in fp["reasons"]))
+
+    def test_ecn_dropped_boosts_network_device(self):
+        ecn_res = evaluate_ecn({"tested": True, "dropped": True})
+        self.assertEqual(ecn_res["status"], "ECN_DROPPED")
+        self.assertGreater(ecn_res["scores"].get("Network device", 0), 0)
+
+        synack = _synack(255, 4128, b"", df=False)
+        synack["ecn_info"] = {"tested": True, "dropped": True}
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ecn_status"], "ECN_DROPPED")
+        self.assertTrue(any("ECN probe dropped" in r for r in fp["reasons"]))
+
+    def test_ecn_rejected_rst(self):
+        ecn_res = evaluate_ecn({"tested": True, "flags": TCP_RST | TCP_ACK})
+        self.assertEqual(ecn_res["status"], "ECN_REJECTED_RST")
+        self.assertGreater(ecn_res["scores"].get("Network device", 0), 0)
+
+    def test_ecn_not_tested_graceful(self):
+        ecn_res = evaluate_ecn(None)
+        self.assertEqual(ecn_res["status"], "NOT_TESTED")
+        self.assertEqual(ecn_res["scores"], {})
+
+        synack = _synack(64, 5840, LINUX_OPTS, df=True)
+        fp = fingerprint(synack)
+        self.assertEqual(fp["ecn_status"], "NOT_TESTED")
 
 
 if __name__ == "__main__":
