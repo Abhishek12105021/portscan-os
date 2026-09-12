@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))                 # for `common` package
 sys.path.insert(0, str(ROOT / "attacker"))    # for `fingerprint` module
 
 from fingerprint import (
-    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps, evaluate_ecn, evaluate_invalid_flags
+    fingerprint, normalise_ttl, classify_ipid_sequence, analyze_tcp_timestamps, evaluate_ecn, evaluate_invalid_flags, evaluate_icmp_udp
 )
 from common.packet import TCP_RST, TCP_SYN, TCP_ACK, TCP_ECE, TCP_CWR, TCP_FIN
 
@@ -459,6 +459,113 @@ class InvalidFlagsFingerprintTests(unittest.TestCase):
         synack = _synack(64, 5840, LINUX_OPTS, df=True)
         fp = fingerprint(synack)
         self.assertEqual(fp["invalid_flags_status"], "NOT_TESTED")
+
+
+class IcmpUdpFingerprintTests(unittest.TestCase):
+    def test_windows_icmp_code_zero_and_long_quote(self):
+        info = {
+            "tested": True,
+            "echo_responded": True,
+            "echo_code": 0,
+            "echo_ttl": 128,
+            "echo_df": False,
+            "echo_ip_id": 25995,
+            "udp_responded": True,
+            "udp_icmp_type": 3,
+            "udp_icmp_code": 3,
+            "udp_ttl": 128,
+            "udp_quoted_len": 328,
+        }
+        res = evaluate_icmp_udp(info)
+        self.assertEqual(res["status"], "WINDOWS_ICMP_UDP")
+        self.assertGreater(res["scores"].get("Windows", 0), 0)
+
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        synack["icmp_udp_info"] = info
+        fp = fingerprint(synack)
+        self.assertEqual(fp["icmp_udp_status"], "WINDOWS_ICMP_UDP")
+        self.assertTrue(any("normalized Code=0" in r for r in fp["reasons"]))
+
+    def test_darwin_icmp_df_and_minimal_quote(self):
+        info = {
+            "tested": True,
+            "echo_responded": True,
+            "echo_code": 9,
+            "echo_ttl": 64,
+            "echo_df": True,
+            "echo_ip_id": 0,
+            "udp_responded": True,
+            "udp_icmp_type": 3,
+            "udp_icmp_code": 3,
+            "udp_ttl": 64,
+            "udp_quoted_len": 28,
+        }
+        res = evaluate_icmp_udp(info)
+        self.assertEqual(res["status"], "DARWIN_ICMP_UDP")
+        self.assertGreater(res["scores"].get("macOS / BSD", 0), 0)
+
+        synack = _synack(64, 65535, LINUX_OPTS, df=True)
+        synack["icmp_udp_info"] = info
+        fp = fingerprint(synack)
+        self.assertEqual(fp["icmp_udp_status"], "DARWIN_ICMP_UDP")
+        self.assertTrue(any("DF=1 and reflected Code=9" in r for r in fp["reasons"]))
+
+    def test_linux_icmp_code_reflection_and_udp_filtered(self):
+        info = {
+            "tested": True,
+            "echo_responded": True,
+            "echo_code": 9,
+            "echo_ttl": 64,
+            "echo_df": False,
+            "echo_ip_id": 36249,
+            "udp_responded": False,
+            "udp_quoted_len": None,
+        }
+        res = evaluate_icmp_udp(info)
+        self.assertEqual(res["status"], "LINUX_ICMP_UDP")
+        self.assertGreater(res["scores"].get("Linux", 0), 0)
+
+        synack = _synack(64, 29200, LINUX_OPTS, df=True)
+        synack["icmp_udp_info"] = info
+        fp = fingerprint(synack)
+        self.assertEqual(fp["icmp_udp_status"], "LINUX_ICMP_UDP")
+        self.assertTrue(any("reflected Code=9 with DF=0" in r for r in fp["reasons"]))
+
+    def test_icmp_fallback_candidate_fingerprint(self):
+        # When all TCP ports are filtered, fingerprinting an ICMP candidate
+        icmp_cand = {
+            "ttl": 128,
+            "window": 0,
+            "options": b"",
+            "df": False,
+            "ip_id": 25995,
+            "flags": 0,
+            "probe_type": "ICMP Echo Reply",
+            "icmp_udp_info": {
+                "tested": True,
+                "echo_responded": True,
+                "echo_code": 0,
+                "echo_ttl": 128,
+                "echo_df": False,
+                "echo_ip_id": 25995,
+                "udp_responded": True,
+                "udp_quoted_len": 328,
+                "udp_ttl": 128,
+            }
+        }
+        fp = fingerprint(icmp_cand)
+        self.assertEqual(fp["os"], "Windows")
+        self.assertEqual(fp["probe_type"], "ICMP Echo Reply")
+        self.assertGreaterEqual(fp["confidence"], 60)
+
+    def test_icmp_udp_not_tested_graceful(self):
+        res = evaluate_icmp_udp(None)
+        self.assertEqual(res["status"], "NOT_TESTED")
+        self.assertEqual(res["scores"], {})
+
+        synack = _synack(64, 5840, LINUX_OPTS, df=True)
+        fp = fingerprint(synack)
+        self.assertEqual(fp["icmp_udp_status"], "NOT_TESTED")
 
 
 if __name__ == "__main__":

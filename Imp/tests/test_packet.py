@@ -55,6 +55,41 @@ class PacketTests(unittest.TestCase):
         self.assertIn(("WSCALE", 8), parsed)
         self.assertIn(("SACK_PERMITTED",), parsed)
 
+    def test_icmp_echo_frame(self):
+        from common.packet import build_icmp_echo_frame, parse_ipv4_icmp_frame
+        frame = build_icmp_echo_frame(
+            "02:00:00:00:00:01",
+            "02:00:00:00:00:02",
+            "192.168.1.10",
+            "192.168.1.20",
+            icmp_id=0x1234,
+            icmp_seq=1,
+            icmp_code=9,
+            payload=b"PINGDATA",
+        )
+        parsed = parse_ipv4_icmp_frame(frame)
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["icmp_type"], 8)
+        self.assertEqual(parsed["icmp_code"], 9)
+        self.assertEqual(parsed["icmp_id"], 0x1234)
+        self.assertEqual(parsed["icmp_seq"], 1)
+        self.assertEqual(parsed["icmp_payload"], b"PINGDATA")
+
+    def test_udp_frame_structure(self):
+        from common.packet import build_udp_frame
+        frame = build_udp_frame(
+            "02:00:00:00:00:01",
+            "02:00:00:00:00:02",
+            "192.168.1.10",
+            "192.168.1.20",
+            src_port=45000,
+            dst_port=33434,
+            payload=b"C" * 100,
+        )
+        self.assertEqual(frame[12:14], b"\x08\x00")
+        # 14 (eth) + 20 (ip) + 8 (udp) + 100 = 142
+        self.assertEqual(len(frame), 142)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,13 @@ import struct
 
 
 ETHERTYPE_IPV4 = 0x0800
+IPPROTO_ICMP = 1
 IPPROTO_TCP = 6
+IPPROTO_UDP = 17
+
+ICMP_ECHO_REPLY = 0
+ICMP_DEST_UNREACH = 3
+ICMP_ECHO_REQUEST = 8
 
 TCP_FIN = 0x01
 TCP_SYN = 0x02
@@ -202,6 +208,67 @@ def build_xmas_frame(src_mac: str, dst_mac: str,
     )
 
 
+def build_icmp_echo_frame(src_mac: str, dst_mac: str,
+                          src_ip: str, dst_ip: str,
+                          icmp_id: int = 0x1234, icmp_seq: int = 1,
+                          icmp_code: int = 0,
+                          payload: bytes = b"A" * 64,
+                          ip_id: int = 0x4000, ttl: int = 64,
+                          df: bool = True) -> bytes:
+    """Builds an Ethernet / IPv4 / ICMP Echo Request frame (Idea 6)."""
+    header = struct.pack("!BBHHH", ICMP_ECHO_REQUEST, icmp_code, 0, icmp_id & 0xFFFF, icmp_seq & 0xFFFF)
+    chk = internet_checksum(header + payload)
+    icmp_packet = struct.pack("!BBHHH", ICMP_ECHO_REQUEST, icmp_code, chk, icmp_id & 0xFFFF, icmp_seq & 0xFFFF) + payload
+
+    total_length = 20 + len(icmp_packet)
+    flags_fragment = 0x4000 if df else 0
+    ip_header = struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45, 0, total_length, ip_id & 0xFFFF,
+        flags_fragment, ttl, IPPROTO_ICMP, 0,
+        ipv4_bytes(src_ip), ipv4_bytes(dst_ip)
+    )
+    ip_chk = internet_checksum(ip_header)
+    ip_packet = struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45, 0, total_length, ip_id & 0xFFFF,
+        flags_fragment, ttl, IPPROTO_ICMP, ip_chk,
+        ipv4_bytes(src_ip), ipv4_bytes(dst_ip)
+    ) + icmp_packet
+
+    return build_ethernet(dst_mac, src_mac, ip_packet)
+
+
+def build_udp_frame(src_mac: str, dst_mac: str,
+                    src_ip: str, dst_ip: str,
+                    src_port: int, dst_port: int,
+                    payload: bytes = b"C" * 300,
+                    ip_id: int = 0x1042, ttl: int = 64,
+                    df: bool = False) -> bytes:
+    """Builds an Ethernet / IPv4 / UDP probe frame (Idea 6: U1 Probe)."""
+    udp_len = 8 + len(payload)
+    udp_hdr = struct.pack("!HHHH", src_port, dst_port, udp_len, 0)
+    udp_packet = udp_hdr + payload
+
+    total_length = 20 + len(udp_packet)
+    flags_fragment = 0x4000 if df else 0
+    ip_header = struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45, 0, total_length, ip_id & 0xFFFF,
+        flags_fragment, ttl, IPPROTO_UDP, 0,
+        ipv4_bytes(src_ip), ipv4_bytes(dst_ip)
+    )
+    ip_chk = internet_checksum(ip_header)
+    ip_packet = struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45, 0, total_length, ip_id & 0xFFFF,
+        flags_fragment, ttl, IPPROTO_UDP, ip_chk,
+        ipv4_bytes(src_ip), ipv4_bytes(dst_ip)
+    ) + udp_packet
+
+    return build_ethernet(dst_mac, src_mac, ip_packet)
+
+
 def parse_ethernet(frame: bytes):
     if len(frame) < 14:
         return None
@@ -308,6 +375,48 @@ def parse_ipv4_tcp_frame(frame: bytes):
     result.update(eth)
     result.update(ip)
     result.update(tcp)
+    return result
+
+
+def parse_icmp(frame: bytes, offset: int):
+    """Parse ICMP header and payload starting at offset."""
+    if len(frame) < offset + 8:
+        return None
+
+    icmp_type, icmp_code, checksum, icmp_id, icmp_seq = struct.unpack(
+        "!BBHHH", frame[offset:offset + 8]
+    )
+    payload = frame[offset + 8:]
+
+    return {
+        "icmp_type": icmp_type,
+        "icmp_code": icmp_code,
+        "icmp_checksum": checksum,
+        "icmp_id": icmp_id,
+        "icmp_seq": icmp_seq,
+        "icmp_payload": payload,
+        "quoted_length": len(payload),
+    }
+
+
+def parse_ipv4_icmp_frame(frame: bytes):
+    """Parse an Ethernet / IPv4 / ICMP frame."""
+    eth = parse_ethernet(frame)
+    if not eth or eth["ethertype"] != ETHERTYPE_IPV4:
+        return None
+
+    ip = parse_ipv4(frame, eth["payload_offset"])
+    if not ip or ip["protocol"] != IPPROTO_ICMP:
+        return None
+
+    icmp = parse_icmp(frame, ip["tcp_offset"])  # offset + ihl
+    if not icmp:
+        return None
+
+    result = {}
+    result.update(eth)
+    result.update(ip)
+    result.update(icmp)
     return result
 
 

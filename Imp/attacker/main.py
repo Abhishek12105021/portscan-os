@@ -41,7 +41,10 @@ import random
 import time
 
 from common.packet import (
-    build_syn_frame, build_ecn_syn_frame, build_synfin_frame, parse_ipv4_tcp_frame, parse_tcp_options, TCP_ACK, TCP_RST, TCP_SYN,
+    build_syn_frame, build_ecn_syn_frame, build_synfin_frame,
+    build_icmp_echo_frame, build_udp_frame,
+    parse_ipv4_tcp_frame, parse_ipv4_icmp_frame, parse_tcp_options,
+    TCP_ACK, TCP_RST, TCP_SYN, IPPROTO_ICMP,
     STANDARD_SYN_OPTIONS,
 )
 from common.npcap import Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
@@ -386,11 +389,97 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                                 ts_samples.append((f_recv_time, opt[1]))
                     break
 
+    # ICMP & UDP Probing Battery (Idea 6)
+    icmp_resp = None
+    time.sleep(0.3)
+    with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as icmp_cap:
+        ie_id = rng.randrange(1, 0xFFFF)
+        ie_frame = build_icmp_echo_frame(
+            src_mac, dst_mac,
+            local_ip, args.target,
+            icmp_id=ie_id, icmp_seq=1, icmp_code=9,
+            payload=b"A" * 64,
+        )
+        ie_sent = time.monotonic()
+        icmp_cap.send(ie_frame)
+        ie_deadline = ie_sent + min(args.timeout, 1.2)
+        while time.monotonic() < ie_deadline:
+            ie_raw = icmp_cap.recv()
+            if not ie_raw:
+                continue
+            ie_info = parse_ipv4_icmp_frame(ie_raw)
+            if not ie_info:
+                continue
+            if (
+                ie_info["src_ip"] == args.target
+                and ie_info["dst_ip"] == local_ip
+                and ie_info["icmp_type"] == 0
+            ):
+                icmp_resp = ie_info
+                break
+
+    udp_resp = None
+    time.sleep(0.3)
+    with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as udp_cap:
+        u_src_port = random.randint(45000, 60000)
+        u_frame = build_udp_frame(
+            src_mac, dst_mac,
+            local_ip, args.target,
+            src_port=u_src_port, dst_port=33434,
+            payload=b"C" * 300,
+        )
+        u_sent = time.monotonic()
+        udp_cap.send(u_frame)
+        u_deadline = u_sent + min(args.timeout, 1.2)
+        while time.monotonic() < u_deadline:
+            u_raw = udp_cap.recv()
+            if not u_raw:
+                continue
+            u_info = parse_ipv4_icmp_frame(u_raw)
+            if not u_info:
+                continue
+            if (
+                u_info["src_ip"] == args.target
+                and u_info["dst_ip"] == local_ip
+                and u_info["icmp_type"] == 3
+            ):
+                udp_resp = u_info
+                break
+
+    icmp_udp_info = {
+        "tested": True,
+        "echo_responded": icmp_resp is not None,
+        "echo_code": icmp_resp["icmp_code"] if icmp_resp else None,
+        "echo_ttl": icmp_resp["ttl"] if icmp_resp else None,
+        "echo_df": icmp_resp["df"] if icmp_resp else None,
+        "echo_ip_id": icmp_resp["ip_id"] if icmp_resp else None,
+        "udp_responded": udp_resp is not None,
+        "udp_icmp_type": udp_resp["icmp_type"] if udp_resp else None,
+        "udp_icmp_code": udp_resp["icmp_code"] if udp_resp else None,
+        "udp_ttl": udp_resp["ttl"] if udp_resp else None,
+        "udp_quoted_len": udp_resp["quoted_length"] if udp_resp else None,
+    }
+
+    # Autonomous Firewall Fallback / Preferred ICMP: If no TCP port responded with SYN/ACK or RST,
+    # or if --prefer-icmp was requested, use the ICMP Echo Reply as the fingerprint candidate!
+    if (fingerprint_candidate is None or getattr(args, "prefer_icmp", False)) and icmp_resp is not None:
+        fingerprint_candidate = {
+            "ttl": icmp_resp["ttl"],
+            "window": 0,
+            "options": b"",
+            "df": icmp_resp["df"],
+            "ip_id": icmp_resp["ip_id"],
+            "flags": 0,
+            "probe_type": "ICMP Echo Reply",
+            "protocol": IPPROTO_ICMP,
+        }
+
     if fingerprint_candidate:
         fingerprint_candidate["ip_ids"] = ip_ids
         fingerprint_candidate["ts_samples"] = ts_samples
         fingerprint_candidate["ecn_info"] = ecn_info
         fingerprint_candidate["invalid_flags_info"] = invalid_flags_info
+        fingerprint_candidate["icmp_udp_info"] = icmp_udp_info
 
     return observations, fingerprint_candidate
 
@@ -427,7 +516,7 @@ def phase3_fingerprint(fingerprint_candidate, banner_results=None):
         return None
 
     fp = fingerprint(fingerprint_candidate, banners=banner_results)
-    probe_type = "Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK"
+    probe_type = fingerprint_candidate.get("probe_type") or ("Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK")
 
     print(f"  Candidate  : {probe_type}")
     print(f"  Likely OS  : {fp['os']}")
@@ -465,6 +554,8 @@ def phase3_fingerprint(fingerprint_candidate, banner_results=None):
             print(f"  ECN Probe  : {fp['ecn_status']} (Flags: 0x{fp.get('ecn_flags', 0):02x})")
     if fp.get("invalid_flags_status") and fp["invalid_flags_status"] != "NOT_TESTED":
         print(f"  Invalid Flgs: {fp.get('invalid_flags_description', fp['invalid_flags_status'])}")
+    if fp.get("icmp_udp_status") and fp["icmp_udp_status"] != "NOT_TESTED":
+        print(f"  ICMP/UDP   : {fp.get('icmp_udp_description', fp['icmp_udp_status'])}")
     if fp.get("banner_evidence"):
         print(f"  Cross-Layer: {len(fp['banner_evidence'])} banner signature(s) correlated")
     print(f"  Probability:")
@@ -629,6 +720,8 @@ def main():
                     help="Skip exploit execution phase")
     p.add_argument("--exploit-delay", type=float, default=1.0,
                     help="Delay between exploit attempts (default: 1.0)")
+    p.add_argument("--prefer-icmp", action="store_true",
+                    help="Force using ICMP Echo Reply as primary fingerprint candidate (demo/firewall test)")
 
     args = p.parse_args()
 

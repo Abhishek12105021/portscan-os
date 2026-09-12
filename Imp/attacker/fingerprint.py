@@ -900,15 +900,177 @@ def evaluate_invalid_flags(invalid_flags_info):
 
 
 # ---------------------------------------------------------------------------
+# ICMP & UDP Probing Battery Analysis (Idea 6)
+# ---------------------------------------------------------------------------
+
+def evaluate_icmp_udp(icmp_udp_info):
+    """
+    Evaluate server response to ICMP Echo and UDP Port Unreachable probes (Idea 6: ICMP/UDP Battery).
+
+    Signatures evaluated:
+      - ICMP Echo Code reflection: Windows resets non-zero request code (e.g. Code 9) to 0.
+        Linux and Apple Darwin reflect Code 9 verbatim.
+      - ICMP Echo DF bit: Apple Darwin / iOS sets DF=1 on Echo replies (RFC 6864).
+        Windows and Linux leave DF=0 on Echo replies.
+      - ICMP Echo TTL: Windows=128, Linux=64, Darwin=64.
+      - UDP U1 Quoted Length: Windows quotes extensive payload (>28B, typically 328B).
+        Apple Darwin quotes RFC 792 minimum 28 bytes (IP hdr + 8B UDP).
+        Linux/Android filters/drops unsolicited UDP probes on mobile devices.
+
+    Parameters:
+        icmp_udp_info (dict or None)
+
+    Returns:
+        dict with:
+            'status': str ('WINDOWS_ICMP_UDP', 'DARWIN_ICMP_UDP', 'LINUX_ICMP_UDP', 'NOT_TESTED')
+            'scores': dict of {os_class: float}
+            'reason': str or None
+            'description': str
+    """
+    if not icmp_udp_info or not icmp_udp_info.get("tested"):
+        return {
+            "status": "NOT_TESTED",
+            "scores": {},
+            "reason": None,
+            "description": "ICMP/UDP battery not performed",
+            "echo_responded": False,
+            "echo_code": None,
+            "echo_ttl": None,
+            "echo_df": None,
+            "udp_responded": False,
+            "udp_quoted_len": None,
+        }
+
+    echo_resp = icmp_udp_info.get("echo_responded", False)
+    echo_code = icmp_udp_info.get("echo_code")
+    echo_ttl = icmp_udp_info.get("echo_ttl")
+    echo_df = icmp_udp_info.get("echo_df")
+    udp_resp = icmp_udp_info.get("udp_responded", False)
+    udp_quoted_len = icmp_udp_info.get("udp_quoted_len")
+    udp_ttl = icmp_udp_info.get("udp_ttl")
+
+    scores = {}
+
+    # 1. Check Windows Signature:
+    # Code 9 was sent; if reply has Code=0 with TTL=128 -> Windows
+    # And/or UDP port unreachable with large quoted length (>28 bytes)
+    is_windows = False
+    if echo_resp and (echo_code == 0) and (echo_ttl is not None and echo_ttl >= 100):
+        is_windows = True
+    elif udp_resp and (udp_quoted_len is not None and udp_quoted_len > 28) and (udp_ttl is not None and udp_ttl >= 100):
+        is_windows = True
+
+    if is_windows:
+        quote_text = f", U1 quotes {udp_quoted_len}B" if udp_resp and udp_quoted_len else ""
+        scores["Windows"] = 3.0
+        return {
+            "status": "WINDOWS_ICMP_UDP",
+            "scores": scores,
+            "reason": f"ICMP Echo Reply normalized Code=0 (Code 9 probe) with TTL={echo_ttl or udp_ttl}{quote_text} -- characteristic of Windows stack",
+            "description": f"Windows Stack (Code=0 normalized, TTL={echo_ttl or udp_ttl}{quote_text})",
+            "echo_responded": echo_resp,
+            "echo_code": echo_code,
+            "echo_ttl": echo_ttl,
+            "echo_df": echo_df,
+            "udp_responded": udp_resp,
+            "udp_quoted_len": udp_quoted_len,
+        }
+
+    # 2. Check Darwin BSD Signature:
+    # DF=1 on ICMP Echo Reply with Code=9 reflection, or UDP U1 exactly 28 bytes quoted
+    is_darwin = False
+    if echo_resp and echo_df and (echo_ttl is not None and echo_ttl <= 64):
+        is_darwin = True
+    elif udp_resp and (udp_quoted_len == 28) and (udp_ttl is not None and udp_ttl <= 64):
+        is_darwin = True
+
+    if is_darwin:
+        quote_text = f", U1 quotes {udp_quoted_len}B (RFC 792 min)" if udp_resp and udp_quoted_len else ""
+        scores["macOS / BSD"] = 3.0
+        return {
+            "status": "DARWIN_ICMP_UDP",
+            "scores": scores,
+            "reason": f"ICMP Echo Reply has DF=1 and reflected Code={echo_code} (TTL={echo_ttl or udp_ttl}){quote_text} -- characteristic of Apple Darwin / BSD",
+            "description": f"Apple Darwin / BSD (DF=1 on ICMP, Code={echo_code} reflected{quote_text})",
+            "echo_responded": echo_resp,
+            "echo_code": echo_code,
+            "echo_ttl": echo_ttl,
+            "echo_df": echo_df,
+            "udp_responded": udp_resp,
+            "udp_quoted_len": udp_quoted_len,
+        }
+
+    # 3. Check Linux Signature:
+    # Code=9 reflected, DF=False, TTL=64, UDP dropped/filtered
+    if echo_resp and (echo_code == 9) and (echo_df is False) and (echo_ttl is not None and echo_ttl <= 64):
+        scores["Linux"] = 2.5
+        return {
+            "status": "LINUX_ICMP_UDP",
+            "scores": scores,
+            "reason": f"ICMP Echo Reply reflected Code=9 with DF=0 and TTL={echo_ttl}; UDP probe silently filtered -- characteristic of Linux kernel (Android stack)",
+            "description": f"Linux / Android (Code=9 reflected, DF=0, UDP filtered)",
+            "echo_responded": echo_resp,
+            "echo_code": echo_code,
+            "echo_ttl": echo_ttl,
+            "echo_df": echo_df,
+            "udp_responded": udp_resp,
+            "udp_quoted_len": udp_quoted_len,
+        }
+
+    # Fallback if partial echo response
+    if echo_resp:
+        if echo_ttl is not None and echo_ttl >= 100:
+            scores["Windows"] = 2.0
+            desc = f"ICMP Echo TTL={echo_ttl} (Windows)"
+            reason = f"ICMP Echo Reply TTL={echo_ttl} indicates Windows initial TTL 128"
+        elif echo_df:
+            scores["macOS / BSD"] = 2.0
+            desc = f"ICMP Echo TTL={echo_ttl}, DF=1 (Darwin)"
+            reason = f"ICMP Echo Reply DF=1 indicates Apple Darwin"
+        else:
+            scores["Linux"] = 1.5
+            scores["macOS / BSD"] = 0.5
+            desc = f"ICMP Echo TTL={echo_ttl}, DF=0 (Unix)"
+            reason = f"ICMP Echo Reply TTL={echo_ttl} with DF=0 indicates Unix/Linux"
+
+        return {
+            "status": "ICMP_GENERIC",
+            "scores": scores,
+            "reason": reason,
+            "description": desc,
+            "echo_responded": echo_resp,
+            "echo_code": echo_code,
+            "echo_ttl": echo_ttl,
+            "echo_df": echo_df,
+            "udp_responded": udp_resp,
+            "udp_quoted_len": udp_quoted_len,
+        }
+
+    return {
+        "status": "ICMP_UDP_FILTERED",
+        "scores": {"Network device": 1.5},
+        "reason": "ICMP and UDP probes were completely filtered by host or network firewall",
+        "description": "ICMP/UDP Filtered",
+        "echo_responded": False,
+        "echo_code": None,
+        "echo_ttl": None,
+        "echo_df": None,
+        "udp_responded": False,
+        "udp_quoted_len": None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main engine
 # ---------------------------------------------------------------------------
 
-def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None, invalid_flags_info=None):
+def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None, invalid_flags_info=None, icmp_udp_info=None):
     """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST)
     with optional cross-layer application banner correlation (Idea 7.1),
     multi-probe IP ID sequence tracking (Idea 2), TCP timestamp clock/uptime
     analysis (Idea 3), active RFC 3168 ECN probe evaluation (Idea 4),
-    and ambiguous/invalid TCP flag response analysis (Idea 5).
+    ambiguous/invalid TCP flag response analysis (Idea 5),
+    and ICMP/UDP battery probe evaluation (Idea 6).
 
     The returned dict keeps the keys the previous engine exposed
     (os, confidence, version, ttl, window, options, reasons) so existing
@@ -932,7 +1094,9 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None,
         invalid_flags_status : invalid flags classification (WINDOWS_RST_ON_INVALID, etc.)
         invalid_flags_probe  : probe type used (e.g. 'SYN+FIN')
         invalid_flags_description : summary description of invalid flags response
-        probe_type   : 'SYN/ACK' or 'RST'
+        icmp_udp_status : ICMP/UDP classification (WINDOWS_ICMP_UDP, DARWIN_ICMP_UDP, etc.)
+        icmp_udp_description : summary description of ICMP/UDP battery response
+        probe_type   : 'SYN/ACK', 'RST', or 'ICMP'
         banners      : input application banners
         banner_evidence : list of correlated banner signatures
     """
@@ -952,6 +1116,9 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None,
 
     if invalid_flags_info is None:
         invalid_flags_info = info.get("invalid_flags_info", info.get("invalid_flags"))
+
+    if icmp_udp_info is None:
+        icmp_udp_info = info.get("icmp_udp_info", info.get("icmp_udp"))
 
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
@@ -1105,6 +1272,13 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None,
     if inv_res["reason"]:
         reasons.append(inv_res["reason"])
 
+    # --- Feature: ICMP & UDP Probing Battery (Idea 6)
+    icmp_res = evaluate_icmp_udp(icmp_udp_info)
+    for cls, s in icmp_res["scores"].items():
+        scores[cls] += s
+    if icmp_res["reason"]:
+        reasons.append(icmp_res["reason"])
+
     # --- Turn raw scores into a probability distribution. -------------------
     total = sum(scores.values())
     if total <= 0:
@@ -1192,7 +1366,10 @@ def fingerprint(info, banners=None, ip_ids=None, ts_samples=None, ecn_info=None,
         "invalid_flags_status": inv_res["status"],
         "invalid_flags_probe": inv_res["probe"],
         "invalid_flags_description": inv_res["description"],
-        "probe_type": "RST" if is_rst else "SYN/ACK",
+        "icmp_udp_status": icmp_res["status"],
+        "icmp_udp_description": icmp_res["description"],
+        "icmp_udp_info": icmp_res,
+        "probe_type": info.get("probe_type", "RST" if is_rst else "SYN/ACK"),
         "options": options,
         "banners": banners,
         "banner_evidence": banner_evidence,
