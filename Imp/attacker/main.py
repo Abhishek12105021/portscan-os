@@ -164,7 +164,7 @@ def phase2_banners(args, open_ports):
     return results
 
 
-def phase3_fingerprint(fingerprint_candidate):
+def phase3_fingerprint(fingerprint_candidate, banner_results=None):
     """Phase 3: OS fingerprinting."""
     print(f"\n{SEPARATOR}")
     print("  [PHASE 3] OS Fingerprinting")
@@ -174,7 +174,7 @@ def phase3_fingerprint(fingerprint_candidate):
         print("  No SYN/ACK or RST was observed — OS fingerprint not available.")
         return None
 
-    fp = fingerprint(fingerprint_candidate)
+    fp = fingerprint(fingerprint_candidate, banners=banner_results)
     probe_type = "Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK"
 
     print(f"  Candidate  : {probe_type}")
@@ -191,6 +191,8 @@ def phase3_fingerprint(fingerprint_candidate):
     if fp.get("ip_id") is not None:
         print(f"  IP ID      : {fp['ip_id']}")
     print(f"  Options    : {', '.join(str(x) for x in fp['options']) or 'none'}")
+    if fp.get("banner_evidence"):
+        print(f"  Cross-Layer: {len(fp['banner_evidence'])} banner signature(s) correlated")
     print(f"  Probability:")
     for cls, pct in fp["distribution"]:
         bar = "#" * (pct // 5)
@@ -397,7 +399,7 @@ def main():
         print(f"\n  [PHASE 2] Banner grabbing skipped (--skip-banners)")
 
     # Phase 3: OS Fingerprinting
-    fp_result = phase3_fingerprint(fp_candidate)
+    fp_result = phase3_fingerprint(fp_candidate, banner_results)
 
     # Phase 5: Exploit Execution
     exploit_results = []

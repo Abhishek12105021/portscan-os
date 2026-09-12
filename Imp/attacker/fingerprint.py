@@ -27,6 +27,8 @@ Each OS family accumulates weighted evidence; the totals are normalised into
 percentages so the caller sees a ranked distribution, not just one label.
 """
 
+import re
+
 from common.packet import parse_tcp_options, TCP_RST, TCP_SYN, TCP_ACK
 
 
@@ -90,6 +92,173 @@ VERSION_HINTS = {
     "macOS / BSD": "macOS or a BSD-derived stack",
     "Network device": "Router / firewall / embedded network appliance",
 }
+
+
+# ---------------------------------------------------------------------------
+# Cross-layer Application Banner Signatures (Idea 7.1)
+# ---------------------------------------------------------------------------
+# High-confidence application banner signatures (RFC 7230, RFC 4253) that
+# corroborate lower-layer TCP/IP stack heuristics.
+BANNER_SIGNATURES = [
+    # (os_class, [ (pattern, weight, desc, optional_tier_hint), ... ])
+    (
+        "Windows",
+        [
+            (r"Microsoft-IIS\/10\b", 4.5, "Microsoft-IIS/10.0 web server", "Windows 10 / 11 / Server 2016+"),
+            (r"Microsoft-IIS\/(?:7\.[50]|8\.[05])\b", 4.5, "Microsoft-IIS 7.x/8.x web server", "Windows 7 / 8 / Vista / Server 2008-2012"),
+            (r"Microsoft-IIS\b", 4.0, "Microsoft-IIS web server", "Windows 10 / 11 / Server 2016+"),
+            (r"Microsoft-HTTPAPI", 4.0, "Microsoft HTTPAPI stack", None),
+            (r"Microsoft FTP Service", 4.0, "Microsoft Windows FTP Service", None),
+            (r"Microsoft ESMTP MAIL Service", 4.0, "Microsoft Exchange / Windows SMTP", None),
+            (r"OpenSSH_for_Windows", 4.0, "Microsoft Windows OpenSSH port", "Windows 10 / 11 / Server 2016+"),
+            (r"\bWindows\b", 3.0, "Explicit Windows platform indicator", None),
+            (r"\bWin32\b", 3.0, "Win32 platform indicator", None),
+            (r"\bWin64\b", 3.0, "Win64 platform indicator", None),
+        ],
+    ),
+    (
+        "Linux",
+        [
+            (r"\bUbuntu\b", 4.0, "Ubuntu Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bDebian\b", 4.0, "Debian GNU/Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bCentOS\b", 4.0, "CentOS Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bRed Hat\b", 4.0, "Red Hat Enterprise Linux", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bRHEL\b", 4.0, "RHEL Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bFedora\b", 4.0, "Fedora Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bAlpine Linux\b", 4.0, "Alpine Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bArch Linux\b", 4.0, "Arch Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bSUSE\b", 4.0, "SUSE Linux distribution", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bvsftpd\b", 3.0, "vsftpd (Very Secure FTP Daemon - Linux standard)", "Linux modern kernel (3.x / 4.x / 5.x+)"),
+            (r"\bProFTPD\b", 2.5, "ProFTPD Unix daemon", None),
+            (r"Apache\/(?:\S+)\s+\((?:Unix|Linux)\)", 3.0, "Apache HTTP Server on Unix/Linux", None),
+            (r"\bdropbear\b", 2.5, "Dropbear lightweight SSH (embedded Linux)", None),
+        ],
+    ),
+    (
+        "macOS / BSD",
+        [
+            (r"\bDarwin\b", 4.0, "Apple Darwin kernel banner", "macOS / modern BSD"),
+            (r"\bFreeBSD\b", 4.0, "FreeBSD operating system banner", "macOS / modern BSD"),
+            (r"\bOpenBSD\b", 4.0, "OpenBSD operating system banner", "macOS / modern BSD"),
+            (r"\bNetBSD\b", 4.0, "NetBSD operating system banner", "macOS / modern BSD"),
+            (r"\bVLC(?: Web Sharing| for (?:iOS|macOS))\b", 3.0, "VLC iOS / macOS Web Sharing service", "macOS / modern BSD"),
+            (r"\bApple\b", 3.5, "Apple Darwin platform indicator", "macOS / modern BSD"),
+        ],
+    ),
+    (
+        "Network device",
+        [
+            (r"\bCisco\b", 4.5, "Cisco IOS / network appliance", "Router / firewall / embedded"),
+            (r"\bMikroTik\b", 4.0, "MikroTik RouterOS", "Router / firewall / embedded"),
+            (r"\bRouterOS\b", 4.0, "MikroTik RouterOS", "Router / firewall / embedded"),
+            (r"\bOpenWrt\b", 3.5, "OpenWrt embedded router Linux", "Router / firewall / embedded"),
+            (r"\bZyXEL\b", 4.0, "ZyXEL network appliance", "Router / firewall / embedded"),
+            (r"\bHuawei\b", 4.0, "Huawei network appliance", "Router / firewall / embedded"),
+            (r"\bFortinet\b", 4.0, "Fortinet firewall appliance", "Router / firewall / embedded"),
+            (r"\bJuniper\b", 4.0, "Juniper Junos appliance", "Router / firewall / embedded"),
+        ],
+    ),
+]
+
+
+def _check_http_header_order(raw_bytes):
+    """Check RFC 7230 HTTP response header ordering quirks."""
+    try:
+        text = raw_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    server_idx = text.lower().find("\r\nserver:")
+    if server_idx == -1:
+        server_idx = text.lower().find("\nserver:")
+    date_idx = text.lower().find("\r\ndate:")
+    if date_idx == -1:
+        date_idx = text.lower().find("\ndate:")
+
+    if server_idx != -1 and date_idx != -1:
+        if server_idx < date_idx:
+            return ("Windows", 0.5, "HTTP response header 'Server' precedes 'Date' (common in IIS/embedded)")
+        else:
+            return ("Linux", 0.5, "HTTP response header 'Date' precedes 'Server' (RFC standard Unix layout)")
+    return None
+
+
+def _evaluate_banners(banners):
+    """Evaluate application banners (Idea 7.1) for cross-layer OS evidence.
+
+    Returns:
+        scores: dict of cls -> float
+        reasons: list of str
+        evidence_items: list of dict
+        tier_hint: (os_class, tier_name) or None
+    """
+    scores = {cls: 0.0 for cls in OS_CLASSES}
+    reasons = []
+    evidence_items = []
+    tier_hint = None
+
+    if not banners:
+        return scores, reasons, evidence_items, tier_hint
+
+    for b in banners:
+        if isinstance(b, str):
+            port = 0
+            service = "Service"
+            version_str = b
+            raw_bytes = b.encode("utf-8")
+        elif isinstance(b, dict):
+            port = b.get("port", 0)
+            service = b.get("service", "Service")
+            version_str = b.get("version", "")
+            raw_bytes = b.get("raw_banner", b"")
+        else:
+            continue
+
+        if not version_str or version_str.startswith("(connect failed") or version_str == "(no banner)":
+            continue
+
+        search_text = f"{version_str}\n{raw_bytes.decode('utf-8', errors='replace')}"
+
+        # Match against signature table
+        for os_class, patterns in BANNER_SIGNATURES:
+            for pattern, weight, desc, opt_tier in patterns:
+                m = re.search(pattern, search_text, re.IGNORECASE)
+                if m:
+                    scores[os_class] += weight
+                    matched_str = m.group(0)
+                    reason_msg = (
+                        f"Cross-layer banner on port {port} ({service}) matches {os_class} "
+                        f"signature '{matched_str}' ({desc})"
+                    )
+                    reasons.append(reason_msg)
+                    evidence_items.append({
+                        "port": port,
+                        "service": service,
+                        "os": os_class,
+                        "matched": matched_str,
+                        "weight": weight,
+                        "description": desc,
+                    })
+                    if opt_tier and tier_hint is None:
+                        tier_hint = (os_class, opt_tier)
+                    break
+
+        # Check HTTP header order if raw HTTP response available
+        if service == "HTTP" and raw_bytes:
+            header_quirk = _check_http_header_order(raw_bytes)
+            if header_quirk:
+                os_cls, weight, desc = header_quirk
+                scores[os_cls] += weight
+                reasons.append(f"Port {port} (HTTP): {desc}")
+                evidence_items.append({
+                    "port": port,
+                    "service": "HTTP",
+                    "os": os_cls,
+                    "matched": "Header Order",
+                    "weight": weight,
+                    "description": desc,
+                })
+
+    return scores, reasons, evidence_items, tier_hint
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +333,7 @@ VERSION_TIERS = {
 }
 
 
-def refine_version(family, feats):
+def refine_version(family, feats, tier_hint=None):
     """Score the sub-tiers within a family and return a ranked list.
 
     Returns (label, [(tier_name, percent), ...]) where `label` is the best
@@ -187,6 +356,9 @@ def refine_version(family, feats):
                     rs.append(reason)
             except (KeyError, TypeError):
                 continue
+        if tier_hint and tier_hint == name:
+            s += 3.0
+            rs.append(f"banner evidence strongly correlates with {name}")
         scores[name] = s
         tier_reasons[name] = rs
 
@@ -251,8 +423,9 @@ def _orders_match(observed, reference):
 # Main engine
 # ---------------------------------------------------------------------------
 
-def fingerprint(info):
-    """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST).
+def fingerprint(info, banners=None):
+    """Return a probabilistic OS fingerprint for one parsed SYN/ACK (or RST)
+    with optional cross-layer application banner correlation (Idea 7.1).
 
     The returned dict keeps the keys the previous engine exposed
     (os, confidence, version, ttl, window, options, reasons) so existing
@@ -263,7 +436,14 @@ def fingerprint(info):
         df           : Don't-Fragment bit observed
         ip_id        : IPv4 identification field
         probe_type   : 'SYN/ACK' or 'RST'
+        banners      : input application banners
+        banner_evidence : list of correlated banner signatures
     """
+    if banners is None:
+        banners = info.get("banners", [])
+    if isinstance(banners, dict):
+        banners = [banners]
+
     options = parse_tcp_options(info.get("options", b""))
     names = [x[0] for x in options]
     mss = next((x[1] for x in options if x[0] == "MSS"), None)
@@ -391,6 +571,12 @@ def fingerprint(info):
             scores["macOS / BSD"] += 0.4
             reasons.append(f"IP ID is non-zero ({ip_id}) with DF set (characteristic of Windows/BSD)")
 
+    # --- Feature: Cross-layer Application Banner Correlation (Idea 7.1)
+    banner_scores, banner_reasons, banner_evidence, banner_tier_hint = _evaluate_banners(banners)
+    for cls, s in banner_scores.items():
+        scores[cls] += s
+    reasons.extend(banner_reasons)
+
     # --- Turn raw scores into a probability distribution. -------------------
     total = sum(scores.values())
     if total <= 0:
@@ -426,8 +612,16 @@ def fingerprint(info):
                 f"{distribution[1][0]} {distribution[1][1]}%) - low certainty"
             )
         # Refine the winning family into a coarse-but-honest version tier.
+        tier_hint = (
+            banner_tier_hint[1]
+            if (banner_tier_hint and banner_tier_hint[0] == best_os)
+            else None
+        )
         if is_rst:
-            version = f"{best_os} family (closed-port RST; open port required for build-tiering)"
+            if tier_hint:
+                version = f"{best_os} ({tier_hint} via cross-layer banner)"
+            else:
+                version = f"{best_os} family (closed-port RST; open port required for build-tiering)"
             version_tiers = []
         else:
             feats = {
@@ -439,7 +633,7 @@ def fingerprint(info):
                 "has_sack": has_sack,
                 "df": df,
             }
-            version, version_tiers = refine_version(best_os, feats)
+            version, version_tiers = refine_version(best_os, feats, tier_hint=tier_hint)
 
         if confidence < 40:
             best_os = f"{best_os} (uncertain)"
@@ -458,5 +652,7 @@ def fingerprint(info):
         "ip_id": ip_id,
         "probe_type": "RST" if is_rst else "SYN/ACK",
         "options": options,
+        "banners": banners,
+        "banner_evidence": banner_evidence,
         "reasons": reasons,
     }

@@ -12,6 +12,7 @@ from ctypes import (
 )
 import socket
 import struct
+import time
 
 
 class PcapAddr(Structure):
@@ -285,7 +286,26 @@ def local_mac_for_ip(ip: str) -> str:
     )
 
 
-def arp_resolve(target_ip: str, source_ip: str) -> str:
+def _lookup_arp_cache(target_ip: str):
+    """Fallback to Windows ARP table if SendARP packet was missed during power-save."""
+    import subprocess
+    import re
+    try:
+        out = subprocess.check_output(
+            ["arp", "-a", target_ip], stderr=subprocess.DEVNULL, timeout=2.0
+        ).decode("utf-8", errors="replace")
+        m = re.search(
+            r"([0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2}[-:][0-9a-fA-F]{2})",
+            out,
+        )
+        if m:
+            return m.group(1).replace("-", ":").lower()
+    except Exception:
+        pass
+    return None
+
+
+def arp_resolve(target_ip: str, source_ip: str, retries: int = 6) -> str:
     iphlpapi = ctypes.WinDLL("iphlpapi.dll")
     SendARP = iphlpapi.SendARP
     SendARP.argtypes = [
@@ -299,10 +319,22 @@ def arp_resolve(target_ip: str, source_ip: str) -> str:
     mac = (c_ubyte * 8)()
     length = c_ulong(8)
 
-    rc = SendARP(dst, src, mac, byref(length))
-    if rc != 0:
+    last_rc = 0
+    for attempt in range(retries):
+        length = c_ulong(8)
+        last_rc = SendARP(dst, src, mac, byref(length))
+        if last_rc == 0 and length.value >= 6:
+            return ":".join(f"{x:02x}" for x in mac[:6])
+        time.sleep(0.35)
+
+    # Fallback to existing Windows ARP table cache before raising
+    cached_mac = _lookup_arp_cache(target_ip)
+    if cached_mac:
+        return cached_mac
+
+    if last_rc != 0:
         raise RuntimeError(
-            f"SendARP failed with Windows error {rc}. "
+            f"SendARP failed with Windows error {last_rc}. "
             "The target may be unreachable or not on the local LAN."
         )
 

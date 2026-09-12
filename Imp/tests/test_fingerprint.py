@@ -147,5 +147,90 @@ class IpIdHeuristicTests(unittest.TestCase):
         self.assertTrue(any("non-zero" in r for r in fp["reasons"]))
 
 
+class BannerCrossLayerTests(unittest.TestCase):
+    def test_iis_banner_boosts_windows(self):
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        banners = [
+            {
+                "port": 80,
+                "service": "HTTP",
+                "version": "Microsoft-IIS/10.0",
+                "raw_banner": b"HTTP/1.1 200 OK\r\nServer: Microsoft-IIS/10.0\r\nDate: Sat, 12 Sep 2026 12:00:00 GMT\r\n\r\n",
+                "success": True,
+            }
+        ]
+        fp_no_banner = fingerprint(synack)
+        fp_with_banner = fingerprint(synack, banners=banners)
+
+        self.assertTrue(fp_with_banner["os"].startswith("Windows"))
+        self.assertGreater(fp_with_banner["confidence"], fp_no_banner["confidence"])
+        self.assertTrue(len(fp_with_banner["banner_evidence"]) > 0)
+        self.assertTrue(any("Microsoft-IIS" in r for r in fp_with_banner["reasons"]))
+        self.assertIn("10 / 11", fp_with_banner["version"])
+
+    def test_ubuntu_ssh_banner_boosts_linux(self):
+        synack = _synack(64, 29200, LINUX_OPTS, df=True)
+        banners = [
+            {
+                "port": 22,
+                "service": "SSH",
+                "version": "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5",
+                "raw_banner": b"SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5\r\n",
+                "success": True,
+            }
+        ]
+        fp_no_banner = fingerprint(synack)
+        fp_with_banner = fingerprint(synack, banners=banners)
+
+        self.assertIn("Linux", fp_with_banner["os"])
+        self.assertGreater(fp_with_banner["confidence"], fp_no_banner["confidence"])
+        self.assertTrue(any("Ubuntu" in r for r in fp_with_banner["reasons"]))
+
+    def test_vlc_ios_banner_boosts_macos_bsd(self):
+        synack = _synack(64, 65535, b"", df=True)
+        banners = [
+            {
+                "port": 80,
+                "service": "HTTP",
+                "version": "VLC Web Sharing",
+                "raw_banner": b"HTTP/1.1 200 OK (VLC Web Sharing)\r\n\r\n",
+                "success": True,
+            }
+        ]
+        fp = fingerprint(synack, banners=banners)
+        self.assertEqual(fp["distribution"][0][0], "macOS / BSD")
+        self.assertTrue(any("VLC" in r for r in fp["reasons"]))
+
+    def test_cisco_banner_boosts_network_device(self):
+        synack = _synack(255, 4128, b"", df=False)
+        banners = [
+            {
+                "port": 23,
+                "service": "Telnet",
+                "version": "User Access Verification Cisco IOS Software",
+                "raw_banner": b"User Access Verification Cisco IOS Software\r\n",
+                "success": True,
+            }
+        ]
+        fp = fingerprint(synack, banners=banners)
+        self.assertEqual(fp["distribution"][0][0], "Network device")
+        self.assertTrue(any("Cisco" in r for r in fp["reasons"]))
+
+    def test_http_header_ordering_quirk(self):
+        synack = _synack(128, 64240, WINDOWS_OPTS, df=True)
+        # Server before Date -> IIS/embedded layout
+        banners = [
+            {
+                "port": 80,
+                "service": "HTTP",
+                "version": "CustomServer/1.0",
+                "raw_banner": b"HTTP/1.0 200 OK\r\nServer: CustomServer/1.0\r\nDate: Sat, 12 Sep 2026\r\n\r\n",
+                "success": True,
+            }
+        ]
+        fp = fingerprint(synack, banners=banners)
+        self.assertTrue(any("precedes 'Date'" in r for r in fp["reasons"]))
+
+
 if __name__ == "__main__":
     unittest.main()
