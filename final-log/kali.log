@@ -1,0 +1,286 @@
+# =============================================================================
+# KALI LINUX EMPIRICAL VERIFICATION LOG & END-TO-END WORKFLOW
+# Project: Port Scanning with OS Fingerprinting, Exploits & Defense Mitigation
+# Target OS: Kali Linux (Debian GNU/Linux, Linux Kernel 6.x)
+# Target Environment: VirtualBox VM on Local Windows Laptop
+# Date: September 13, 2026
+# Attacker Host: Windows 11 Laptop (192.168.56.1, MAC: 0a:00:27:00:00:0e)
+# Target Host: Kali Linux (192.168.56.101, MAC: 08:00:27:5a:87:bc)
+# Npcap Adapter: \Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D} (VirtualBox Host-Only Ethernet Adapter)
+# =============================================================================
+
+# =============================================================================
+# 0. WORKFLOW & NETWORK CONFIGURATION GUIDE
+# =============================================================================
+#
+# 1. VirtualBox Network Configuration:
+#    - Machine -> Settings -> Network -> Adapter 1
+#    - Attached to: "Host-only Adapter"
+#    - Name: "VirtualBox Host-Only Ethernet Adapter"
+#    - Promiscuous Mode: "Allow All"
+#
+# 2. Host (Windows Laptop) Adapter Identification:
+#    - Command: python -c "from common.npcap import list_adapters; [print(f'{a[0]} -> {a[1]}') for a in list_adapters()]"
+#    - Matched GUID: \Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}
+#    - Host IP on Subnet: 192.168.56.1
+#
+# 3. Target (Kali Linux) Verification:
+#    - Command inside Kali: hostname -I  -> 192.168.56.101
+#    - Command inside Kali: ip a          -> eth0: 192.168.56.101/24 (MAC 08:00:27:5a:87:bc)
+#
+# 4. Starting Target Services on Kali:
+#    - OpenSSH Server (Port 22):  sudo systemctl start ssh
+#    - Apache2 Web Server (Port 80): sudo systemctl start apache2
+#    - Python HTTP Server (Port 8080): python3 -m http.server 8080
+#
+# 5. Restoring Default VM State After Testing:
+#    - Shut down Kali VM.
+#    - Settings -> Network -> Attached to: change back to "NAT" to regain internet access.
+#
+# =============================================================================
+
+
+# =============================================================================
+# TEST 1: Closed-Port Only OS Fingerprinting (Zero-Open-Port RST Fingerprinting)
+# All probed ports closed; no services running on Kali Linux
+# =============================================================================
+Command:
+python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 22 80 81 --skip-exploits
+
+Terminal Output:
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.56.101
+  Attacker     : 192.168.56.1 (0a:00:27:00:00:0e)
+  Target MAC   : 08:00:27:5a:87:bc
+  Ports        : [22, 80, 81]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.56.101
+  Attacker IP : 192.168.56.1
+  Attacker MAC: 0a:00:27:00:00:0e
+  Target MAC  : 08:00:27:5a:87:bc
+  Ports       : 3
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+     22  CLOSED                         TTL= 64 WIN=0
+     80  CLOSED                         TTL= 64 WIN=0
+     81  CLOSED                         TTL= 64 WIN=0
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : Closed-Port TCP RST
+  Likely OS  : Linux
+  Confidence : 76%
+  Version    : Linux family (closed-port RST; open port required for build-tiering)
+  TTL        : 64 (initial 64, ~0 hop(s))
+  Window     : 0
+  DF bit     : set
+  IP ID Seq  : [0, 0, 0] (deltas: [0, 0])
+  IP ID Class: ALL_ZERO
+  Options    : none
+  Invalid Flgs: Silently Dropped on Open Port (RFC 793 Linux/Unix)
+  ICMP/UDP   : Linux / Android (Code=9 reflected, DF=0, UDP filtered)
+  Probability:
+    Linux             76%  ###############
+    macOS / BSD       24%  ####
+    Windows            0%
+    Network device     0%
+  Evidence   :
+    - Probe response: TCP RST (Closed-Port Fingerprinting)
+    - TCP window is 0 (standard closed-port RST response)
+    - RST with initial TTL 64 indicates Linux/macOS/BSD stack
+    - IP ID sequence is constant zero [0, 0, 0] with DF set (RFC 6864, strong Linux indicator)
+    - Ambiguous/invalid TCP flags (SYN+FIN) silently dropped on open port but RST on closed port -- RFC 793 compliant Linux/Unix behavior
+    - ICMP Echo Reply reflected Code=9 with DF=0 and TTL=64; UDP probe silently filtered -- characteristic of Linux kernel (Android stack)
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 3
+  Open          : 0
+  Closed        : 3
+  Filtered/NR   : 0
+  Banners found : 0/0
+  OS guess      : Linux (76%)
+═════════════════════════════════════════════════════════════════
+
+
+# =============================================================================
+# TEST 2: Autonomous ICMP Echo Fallback Verification (--prefer-icmp)
+# Explicit verification of ICMP Echo Reply as fingerprint candidate
+# =============================================================================
+Command:
+python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 22 80 81 --skip-exploits --prefer-icmp
+
+Terminal Output:
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.56.101
+  Attacker     : 192.168.56.1 (0a:00:27:00:00:0e)
+  Target MAC   : 08:00:27:5a:87:bc
+  Ports        : [22, 80, 81]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.56.101
+  Attacker IP : 192.168.56.1
+  Attacker MAC: 0a:00:27:00:00:0e
+  Target MAC  : 08:00:27:5a:87:bc
+  Ports       : 3
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+     22  CLOSED                         TTL= 64 WIN=0
+     80  CLOSED                         TTL= 64 WIN=0
+     81  CLOSED                         TTL= 64 WIN=0
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : ICMP Echo Reply
+  Likely OS  : Linux
+  Confidence : 67%
+  Version    : Linux 2.4 / 2.6 (older kernel) or Linux modern kernel (3.x / 4.x / 5.x+)
+                50%  Linux 2.4 / 2.6 (older kernel)
+                50%  Linux modern kernel (3.x / 4.x / 5.x+)
+  TTL        : 64 (initial 64, ~0 hop(s))
+  Window     : 0
+  DF bit     : clear
+  IP ID Seq  : [0, 0, 0] (deltas: [0, 0])
+  IP ID Class: ALL_ZERO
+  Options    : none
+  Invalid Flgs: Silently Dropped on Open Port (RFC 793 Linux/Unix)
+  ICMP/UDP   : Linux / Android (Code=9 reflected, DF=0, UDP filtered)
+  Probability:
+    Linux             67%  #############
+    macOS / BSD       25%  #####
+    Windows            4%
+    Network device     4%
+  Evidence   :
+    - initial TTL 64 (~64 observed, 0 hop(s)) is typical of Linux/macOS/BSD
+    - TCP window 0 (no strong family match)
+    - Don't-Fragment (DF) bit clear
+    - TCP timestamp absent (leans Windows)
+    - IP ID sequence is constant zero [0, 0, 0]
+    - Ambiguous/invalid TCP flags (SYN+FIN) silently dropped on open port but RST on closed port -- RFC 793 compliant Linux/Unix behavior
+    - ICMP Echo Reply reflected Code=9 with DF=0 and TTL=64; UDP probe silently filtered -- characteristic of Linux kernel (Android stack)
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 3
+  Open          : 0
+  Closed        : 3
+  Filtered/NR   : 0
+  Banners found : 0/0
+  OS guess      : Linux (67%)
+═════════════════════════════════════════════════════════════════
+
+
+# =============================================================================
+# TEST 3: Full Attack Chain & Cross-Layer Banner Correlation
+# Services: Port 22 (SSH), Port 80 (Apache), Port 8080 (Python HTTP), Port 81 (Closed)
+# =============================================================================
+Command:
+python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 22 80 81 8080 --skip-exploits
+
+Terminal Output:
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.56.101
+  Attacker     : 192.168.56.1 (0a:00:27:00:00:0e)
+  Target MAC   : 08:00:27:5a:87:bc
+  Ports        : [22, 80, 81, 8080]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.56.101
+  Attacker IP : 192.168.56.1
+  Attacker MAC: 0a:00:27:00:00:0e
+  Target MAC  : 08:00:27:5a:87:bc
+  Ports       : 4
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+     22  OPEN                           TTL= 64 WIN=65160
+     80  OPEN                           TTL= 64 WIN=65160
+     81  CLOSED                         TTL= 64 WIN=0
+   8080  OPEN                           TTL= 64 WIN=65160
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 2] Service Banner Grabbing
+═════════════════════════════════════════════════════════════════
+  ✓    22  SSH      → SSH-2.0-OpenSSH_10.3p1 Debian-5
+  ✓    80  HTTP     → Apache/2.4.68 (Debian)
+  ✓  8080  HTTP     → SimpleHTTP/0.6 Python/3.13.14
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : Open-Port TCP SYN/ACK
+  Likely OS  : Linux
+  Confidence : 72%
+  Version    : Linux modern kernel (3.x / 4.x / 5.x+)
+               100%  Linux modern kernel (3.x / 4.x / 5.x+)
+                 0%  Linux 2.4 / 2.6 (older kernel)
+  TTL        : 64 (initial 64, ~0 hop(s))
+  Window     : 65160
+  DF bit     : set
+  IP ID Seq  : [0, 0, 0, 0, 0, 0] (deltas: [0, 0, 0, 0, 0])
+  IP ID Class: ALL_ZERO
+  Options    : ('MSS', 1460), ('SACK_PERMITTED',), ('TIMESTAMP', 3475234838, 1), ('NOP',), ('WSCALE', 8)
+  Timestamp  : Clock Rate: Randomized offset (RFC 7323 Darwin PRNG)
+  ECN Probe  : Supported (ECE reflected: True, Flags: 0x52) [RFC 3168]
+  Invalid Flgs: Silently Dropped on Open Port (RFC 793 Linux/Unix)
+  ICMP/UDP   : Linux / Android (Code=9 reflected, DF=0, UDP filtered)
+  Cross-Layer: 4 banner signature(s) correlated
+  Probability:
+    Linux             72%  ##############
+    macOS / BSD       25%  #####
+    Windows            3%
+    Network device     0%
+  Evidence   :
+    - initial TTL 64 (~64 observed, 0 hop(s)) is typical of Linux/macOS/BSD
+    - TCP window 65160 matches Linux
+    - Don't-Fragment (DF) bit set - modern TCP stack
+    - TCP option order ['MSS', 'SACK_PERMITTED', 'TIMESTAMP', 'WSCALE'] matches a known Linux layout
+    - TCP timestamp present (leans Unix-like)
+    - SACK permitted
+    - MSS=1460
+    - window scale=8
+    - IP ID sequence is constant zero [0, 0, 0, 0, 0, 0] with DF set (RFC 6864, strong Linux indicator)
+    - Cross-layer banner on port 22 (SSH) matches Linux signature 'Debian' (Debian GNU/Linux distribution)
+    - Cross-layer banner on port 80 (HTTP) matches Linux signature 'Debian' (Debian GNU/Linux distribution)
+    - Port 80 (HTTP): HTTP response header 'Date' precedes 'Server' (RFC standard Unix layout)
+    - Port 8080 (HTTP): HTTP response header 'Server' precedes 'Date' (common in IIS/embedded)
+    - TCP timestamp uses randomized initial offsets (RFC 7323, characteristic of Apple Darwin / iOS / macOS)
+    - RFC 3168 ECN negotiation supported (ECE reflected, CWR=0 in SYN/ACK) -- characteristic of Linux & Apple Darwin
+    - Ambiguous/invalid TCP flags (SYN+FIN) silently dropped on open port but RST on closed port -- RFC 793 compliant Linux/Unix behavior
+    - ICMP Echo Reply reflected Code=9 with DF=0 and TTL=64; UDP probe silently filtered -- characteristic of Linux kernel (Android stack)
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 4
+  Open          : 3
+  Closed        : 1
+  Filtered/NR   : 0
+  Banners found : 3/3
+  OS guess      : Linux (72%)
+═════════════════════════════════════════════════════════════════

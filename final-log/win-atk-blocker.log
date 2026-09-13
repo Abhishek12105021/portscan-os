@@ -1,0 +1,101 @@
+python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 23 24 80 81 82 83 84
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.0.116
+  Attacker     : 192.168.0.105 (a0:29:42:92:ef:19)
+  Target MAC   : d8:5e:d3:99:09:6c
+  Ports        : [21, 22, 23, 24, 80, 81, 82, 83, 84]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.0.116
+  Attacker IP : 192.168.0.105
+  Attacker MAC: a0:29:42:92:ef:19
+  Target MAC  : d8:5e:d3:99:09:6c
+  Ports       : 9
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+     21  OPEN                           TTL=128 WIN=65535
+     22  NO RESPONSE / POSSIBLY FILTERED
+     23  NO RESPONSE / POSSIBLY FILTERED
+     24  NO RESPONSE / POSSIBLY FILTERED
+     80  OPEN                           TTL=128 WIN=65535
+     81  NO RESPONSE / POSSIBLY FILTERED
+     82  NO RESPONSE / POSSIBLY FILTERED
+     83  NO RESPONSE / POSSIBLY FILTERED
+     84  NO RESPONSE / POSSIBLY FILTERED
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 2] Service Banner Grabbing
+═════════════════════════════════════════════════════════════════
+  ✓    21  FTP      → LabFTP Server (Vulnerable Demo) Ready
+  ✓    80  HTTP     → VulnHTTP/1.0 (Lab Demo)
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : Open-Port TCP SYN/ACK
+  Likely OS  : Windows
+  Confidence : 60%
+  Version    : Windows 10 / 11 / Server 2016+
+                71%  Windows 10 / 11 / Server 2016+
+                29%  Windows 7 / 8 / Vista / Server 2008-2012        
+                 0%  Windows 9x / 2000 (legacy)
+  TTL        : 128 (initial 128, ~0 hop(s))
+  Window     : 65535
+  DF bit     : set
+  IP ID      : 60588
+  Options    : ('MSS', 1460), ('NOP',), ('WSCALE', 8), ('SACK_PERMITTED',), ('TIMESTAMP', 8795615, 1)
+  Probability:
+    Windows           60%  ############
+    macOS / BSD       21%  ####
+    Linux             19%  ###
+    Network device     0%
+  Evidence   :
+    - initial TTL 128 (~128 observed, 0 hop(s)) is characteristic of Windows
+    - TCP window 65535 matches Windows, Linux, macOS / BSD
+    - Don't-Fragment (DF) bit set - modern TCP stack
+    - TCP option order ['MSS', 'WSCALE', 'SACK_PERMITTED', 'TIMESTAMP'] matches a known Windows layout
+    - TCP timestamp present (leans Unix-like)
+    - SACK permitted
+    - MSS=1460
+    - window scale=8
+    - IP ID is non-zero (60588) with DF set (characteristic of Windows/BSD)
+
+═════════════════════════════════════════════════════════════════    
+  [PHASE 5] Exploit Execution
+═════════════════════════════════════════════════════════════════    
+
+  ─────────────────────────────────────────────────────────────────  
+  [EXPLOIT] FTP Anonymous Login (port 21)
+  ─────────────────────────────────────────────────────────────────  
+  Status  : SUCCESS ✓
+  Detail  : Logged in as anonymous with PASS
+  Work Dir: 257 "/" is the current directory.
+  Files   :
+    drwxr-xr-x 1 ftp ftp 0 Jan 01 00:00 pub
+
+  ─────────────────────────────────────────────────────────────────  
+  [EXPLOIT] HTTP Directory Traversal (port 80)
+  ─────────────────────────────────────────────────────────────────  
+  Status   : FAILED ✗
+  Detail   : All 12 traversal payloads failed. Server may not be vulnerable or files not present.
+  Payloads : 12 attempted
+
+
+═════════════════════════════════════════════════════════════════    
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════    
+  Ports scanned : 9
+  Open          : 2
+  Closed        : 0
+  Filtered/NR   : 7
+  Banners found : 2/2
+  OS guess      : Windows (60%)
+  Exploits      : 1/2 successful
+    ✓ FTP Anonymous Login (port 21)
+    ✗ HTTP Directory Traversal (port 80)
+═════════════════════════════════════════════════════════════════    

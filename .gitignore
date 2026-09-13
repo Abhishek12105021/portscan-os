@@ -8,3 +8,5 @@ design-report/*
 !design-report/design_report.tex
 !design-report/design_report.pdf
 logs/
+
+tracker.md

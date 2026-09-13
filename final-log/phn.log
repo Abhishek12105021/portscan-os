@@ -1,0 +1,71 @@
+python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.169 --ports 2221 2122 --skip-exploits
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.0.169
+  Attacker     : 192.168.0.105 (a0:29:42:92:ef:19)
+  Target MAC   : 1a:18:87:69:fd:c1
+  Ports        : [2221, 2122]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.0.169
+  Attacker IP : 192.168.0.105
+  Attacker MAC: a0:29:42:92:ef:19
+  Target MAC  : 1a:18:87:69:fd:c1
+  Ports       : 2
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+   2221  OPEN                           TTL= 64 WIN=65535
+   2122  CLOSED                         TTL= 64 WIN=0
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 2] Service Banner Grabbing
+═════════════════════════════════════════════════════════════════
+  ✓  2221  Unknown  → 220 Service ready for new user.
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : Open-Port TCP SYN/ACK
+  Likely OS  : Linux
+  Confidence : 58%
+  Version    : Linux modern kernel (3.x / 4.x / 5.x+)
+               100%  Linux modern kernel (3.x / 4.x / 5.x+)
+                 0%  Linux 2.4 / 2.6 (older kernel)
+  TTL        : 64 (initial 64, ~0 hop(s))
+  Window     : 65535
+  DF bit     : set
+  IP ID      : 0
+  Options    : ('MSS', 1460), ('SACK_PERMITTED',), ('TIMESTAMP', 3118032441, 1), ('NOP',), ('WSCALE', 8)
+  Probability:
+    Linux             58%  ###########
+    macOS / BSD       30%  ######
+    Windows           12%  ##
+    Network device     0%
+  Evidence   :
+    - initial TTL 64 (~64 observed, 0 hop(s)) is typical of Linux/macOS/BSD
+    - TCP window 65535 matches Windows, Linux, macOS / BSD
+    - Don't-Fragment (DF) bit set - modern TCP stack
+    - TCP option order ['MSS', 'SACK_PERMITTED', 'TIMESTAMP', 'WSCALE'] matches a known Linux layout
+    - TCP timestamp present (leans Unix-like)
+    - SACK permitted
+    - MSS=1460
+    - window scale=8
+    - IP ID is 0 with DF set (RFC 6864, characteristic of Linux)     
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+
+═════════════════════════════════════════════════════════════════    
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════    
+  Ports scanned : 2
+  Open          : 1
+  Closed        : 1
+  Filtered/NR   : 0
+  Banners found : 1/1
+  OS guess      : Linux (58%)
+═════════════════════════════════════════════════════════════════    

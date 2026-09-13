@@ -1,0 +1,254 @@
+﻿=============================================================================
+100-PORT VERIFICATION TEST RUN
+Date      : 2026-09-13 21:43:47
+Target IP : 192.168.1.104
+Adapter   : \Device\NPF_{79613882-4F62-495C-9891-92E06A2C6E9B}
+Exploits  : Skipped (--skip-exploits)
+=============================================================================
+
+=== BATCH 1: Top 50 Well-Known & System Services (Low Range) ===
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.1.104
+  Attacker     : 192.168.1.105 (d8:80:83:74:7c:b3)
+  Target MAC   : 98:fe:3e:5b:c3:27
+  Ports        : [20, 21, 22, 23, 25, 53, 79, 80, 81, 82, 88, 110, 111, 113, 119, 135, 137, 138, 139, 143, 161, 179, 199, 389, 443, 445, 464, 465, 500, 514, 515, 554, 587, 631, 636, 873, 990, 993, 995, 1024, 1025, 1026, 1027, 1028, 1029, 1080, 1194, 1433, 1521, 1723]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.1.104
+  Attacker IP : 192.168.1.105
+  Attacker MAC: d8:80:83:74:7c:b3
+  Target MAC  : 98:fe:3e:5b:c3:27
+  Ports       : 50
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+     20  CLOSED                         TTL=128 WIN=0
+     21  CLOSED                         TTL=128 WIN=0
+     22  CLOSED                         TTL=128 WIN=0
+     23  CLOSED                         TTL=128 WIN=0
+     25  CLOSED                         TTL=128 WIN=0
+     53  CLOSED                         TTL=128 WIN=0
+     79  CLOSED                         TTL=128 WIN=0
+     80  CLOSED                         TTL=128 WIN=0
+     81  CLOSED                         TTL=128 WIN=0
+     82  CLOSED                         TTL=128 WIN=0
+     88  CLOSED                         TTL=128 WIN=0
+    110  CLOSED                         TTL=128 WIN=0
+    111  CLOSED                         TTL=128 WIN=0
+    113  CLOSED                         TTL=128 WIN=0
+    119  CLOSED                         TTL=128 WIN=0
+    135  OPEN                           TTL=128 WIN=65535
+    137  CLOSED                         TTL=128 WIN=0
+    138  CLOSED                         TTL=128 WIN=0
+    139  OPEN                           TTL=128 WIN=8192
+    143  CLOSED                         TTL=128 WIN=0
+    161  CLOSED                         TTL=128 WIN=0
+    179  CLOSED                         TTL=128 WIN=0
+    199  CLOSED                         TTL=128 WIN=0
+    389  CLOSED                         TTL=128 WIN=0
+    443  CLOSED                         TTL=128 WIN=0
+    445  OPEN                           TTL=128 WIN=65535
+    464  CLOSED                         TTL=128 WIN=0
+    465  CLOSED                         TTL=128 WIN=0
+    500  CLOSED                         TTL=128 WIN=0
+    514  CLOSED                         TTL=128 WIN=0
+    515  CLOSED                         TTL=128 WIN=0
+    554  CLOSED                         TTL=128 WIN=0
+    587  CLOSED                         TTL=128 WIN=0
+    631  CLOSED                         TTL=128 WIN=0
+    636  CLOSED                         TTL=128 WIN=0
+    873  CLOSED                         TTL=128 WIN=0
+    990  CLOSED                         TTL=128 WIN=0
+    993  CLOSED                         TTL=128 WIN=0
+    995  CLOSED                         TTL=128 WIN=0
+   1024  CLOSED                         TTL=128 WIN=0
+   1025  OPEN                           TTL=128 WIN=65535
+   1026  CLOSED                         TTL=128 WIN=0
+   1027  CLOSED                         TTL=128 WIN=0
+   1028  CLOSED                         TTL=128 WIN=0
+   1029  CLOSED                         TTL=128 WIN=0
+   1080  CLOSED                         TTL=128 WIN=0
+   1194  CLOSED                         TTL=128 WIN=0
+   1433  CLOSED                         TTL=128 WIN=0
+   1521  CLOSED                         TTL=128 WIN=0
+   1723  CLOSED                         TTL=128 WIN=0
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 2] Service Banner Grabbing
+═════════════════════════════════════════════════════════════════
+  ✗   135  Unknown  → (no banner)
+  ✗   139  Unknown  → (no banner)
+  ✗   445  Unknown  → (no banner)
+  ✗  1025  Unknown  → (no banner)
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : Open-Port TCP SYN/ACK
+  Likely OS  : Windows
+  Confidence : 71%
+  Version    : Windows 10 / 11 / Server 2016+
+                71%  Windows 10 / 11 / Server 2016+
+                29%  Windows 7 / 8 / Vista / Server 2008-2012
+                 0%  Windows 9x / 2000 (legacy)
+  TTL        : 128 (initial 128, ~0 hop(s))
+  Window     : 65535
+  DF bit     : set
+  IP ID Seq  : [13123, 13124, 13125, 13126, 13127, 13128, 13129, 13130, 13131, 13132, 13133, 13134, 13135, 13136, 13137, 13138, 13139, 13141, 13142, 13143, 13146, 13147, 13148, 13150, 13151, 13152, 13153, 13156, 13157, 13158, 13161, 13162, 13163, 13164, 13165, 13166, 13167, 13169, 13170, 13171, 13173, 13174, 13176, 13178, 13179, 13181, 13182, 13183, 13184, 13186, 13188, 13190] (deltas: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 3, 1, 1, 2, 1, 1, 1, 3, 1, 1, 3, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 2, 2, 1, 2, 1, 1, 1, 2, 2, 2])
+  IP ID Class: STRICT_INCREMENTAL
+  Options    : ('MSS', 1460), ('NOP',), ('WSCALE', 8), ('SACK_PERMITTED',), ('TIMESTAMP', 279567749, 1)
+  Timestamp  : Clock Rate: ~1001.0 Hz (HZ_1000)
+  Uptime     : ~3 day(s), 5 hour(s), 34 min(s)
+  ECN Probe  : Ignored / Not Negotiated (ECE reflected: False, Flags: 0x12) [Default Windows Stack]
+  Invalid Flgs: RST on Open Port (Flags=0x14, Windows Rule-Breaker)
+  ICMP/UDP   : Windows Stack (Code=0 normalized, TTL=128, U1 quotes 328B)
+  Probability:
+    Windows           71%  ##############
+    Linux             14%  ##
+    macOS / BSD       12%  ##
+    Network device     3%  
+  Evidence   :
+    - initial TTL 128 (~128 observed, 0 hop(s)) is characteristic of Windows
+    - TCP window 65535 matches Windows, Linux, macOS / BSD
+    - Don't-Fragment (DF) bit set - modern TCP stack
+    - TCP option order ['MSS', 'WSCALE', 'SACK_PERMITTED', 'TIMESTAMP'] matches a known Windows layout
+    - TCP timestamp present (leans Unix-like)
+    - SACK permitted
+    - MSS=1460
+    - window scale=8
+    - IP ID sequence is strictly incremental (deltas: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 3, 1, 1, 2, 1, 1, 1, 3, 1, 1, 3, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 2, 2, 1, 2, 1, 1, 1, 2, 2, 2], avg: 1.3) (Windows sequential/global counter)
+    - TCP timestamp clock frequency ~1001.0 Hz matches modern Windows 10/11 (1000 Hz / 1ms tick) or Linux low-latency
+    - RFC 3168 ECN flags ignored (ECE=0, CWR=0 in SYN/ACK) -- characteristic of default Windows TCP/IP stack
+    - Ambiguous/invalid TCP flags (SYN+FIN) on open port elicited RST response (Flags=0x14) -- characteristic of Windows stack (RFC 793 rule-breaker)
+    - ICMP Echo Reply normalized Code=0 (Code 9 probe) with TTL=128, U1 quotes 328B -- characteristic of Windows stack
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 50
+  Open          : 4
+  Closed        : 46
+  Filtered/NR   : 0
+  Banners found : 0/4
+  OS guess      : Windows (71%)
+═════════════════════════════════════════════════════════════════
+
+=== BATCH 2: Top 50 High Ports, Web Apps, RPC & Cloud/Dev Services ===
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.1.104
+  Attacker     : 192.168.1.105 (d8:80:83:74:7c:b3)
+  Target MAC   : 98:fe:3e:5b:c3:27
+  Ports        : [1883, 1900, 2049, 2082, 2083, 2086, 2087, 2121, 2221, 2375, 3000, 3128, 3306, 3389, 4443, 4899, 5000, 5060, 5357, 5432, 5672, 5900, 6379, 7001, 8000, 8008, 8080, 8081, 8082, 8443, 8880, 8888, 9000, 9090, 9200, 10000, 27017, 49152, 49153, 49154, 49155, 49156, 49157, 49158, 49159, 49160, 49161, 49162, 49163, 49164]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.1.104
+  Attacker IP : 192.168.1.105
+  Attacker MAC: d8:80:83:74:7c:b3
+  Target MAC  : 98:fe:3e:5b:c3:27
+  Ports       : 50
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+   1883  CLOSED                         TTL=128 WIN=0
+   1900  CLOSED                         TTL=128 WIN=0
+   2049  CLOSED                         TTL=128 WIN=0
+   2082  CLOSED                         TTL=128 WIN=0
+   2083  CLOSED                         TTL=128 WIN=0
+   2086  CLOSED                         TTL=128 WIN=0
+   2087  CLOSED                         TTL=128 WIN=0
+   2121  CLOSED                         TTL=128 WIN=0
+   2221  CLOSED                         TTL=128 WIN=0
+   2375  CLOSED                         TTL=128 WIN=0
+   3000  CLOSED                         TTL=128 WIN=0
+   3128  CLOSED                         TTL=128 WIN=0
+   3306  CLOSED                         TTL=128 WIN=0
+   3389  CLOSED                         TTL=128 WIN=0
+   4443  CLOSED                         TTL=128 WIN=0
+   4899  CLOSED                         TTL=128 WIN=0
+   5000  CLOSED                         TTL=128 WIN=0
+   5060  CLOSED                         TTL=128 WIN=0
+   5357  CLOSED                         TTL=128 WIN=0
+   5432  CLOSED                         TTL=128 WIN=0
+   5672  CLOSED                         TTL=128 WIN=0
+   5900  CLOSED                         TTL=128 WIN=0
+   6379  CLOSED                         TTL=128 WIN=0
+   7001  CLOSED                         TTL=128 WIN=0
+   8000  CLOSED                         TTL=128 WIN=0
+   8008  CLOSED                         TTL=128 WIN=0
+   8080  CLOSED                         TTL=128 WIN=0
+   8081  CLOSED                         TTL=128 WIN=0
+   8082  CLOSED                         TTL=128 WIN=0
+   8443  CLOSED                         TTL=128 WIN=0
+   8880  CLOSED                         TTL=128 WIN=0
+   8888  CLOSED                         TTL=128 WIN=0
+   9000  CLOSED                         TTL=128 WIN=0
+   9090  CLOSED                         TTL=128 WIN=0
+   9200  CLOSED                         TTL=128 WIN=0
+  10000  CLOSED                         TTL=128 WIN=0
+  27017  CLOSED                         TTL=128 WIN=0
+  49152  CLOSED                         TTL=128 WIN=0
+  49153  CLOSED                         TTL=128 WIN=0
+  49154  CLOSED                         TTL=128 WIN=0
+  49155  CLOSED                         TTL=128 WIN=0
+  49156  CLOSED                         TTL=128 WIN=0
+  49157  CLOSED                         TTL=128 WIN=0
+  49158  CLOSED                         TTL=128 WIN=0
+  49159  CLOSED                         TTL=128 WIN=0
+  49160  CLOSED                         TTL=128 WIN=0
+  49161  CLOSED                         TTL=128 WIN=0
+  49162  CLOSED                         TTL=128 WIN=0
+  49163  CLOSED                         TTL=128 WIN=0
+  49164  CLOSED                         TTL=128 WIN=0
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : Closed-Port TCP RST
+  Likely OS  : Windows
+  Confidence : 69%
+  Version    : Windows family (closed-port RST; open port required for build-tiering)
+  TTL        : 128 (initial 128, ~0 hop(s))
+  Window     : 0
+  DF bit     : set
+  IP ID Seq  : [13207, 13208, 13209, 13210, 13211, 13212, 13213, 13215, 13217, 13218, 13219, 13220, 13221, 13222, 13223, 13224, 13225, 13226, 13228, 13229, 13230, 13231, 13232, 13233, 13234, 13235, 13236, 13237, 13238, 13239, 13240, 13241, 13242, 13243, 13244, 13245, 13246, 13247, 13248, 13249, 13250, 13251, 13252, 13253, 13254, 13255, 13256, 13257, 13258, 13259] (deltas: [1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+  IP ID Class: STRICT_INCREMENTAL
+  Options    : none
+  Invalid Flgs: Silently Dropped on Open Port (RFC 793 Linux/Unix)
+  ICMP/UDP   : Windows Stack (Code=0 normalized, TTL=128, U1 quotes 328B)
+  Probability:
+    Windows           69%  #############
+    Linux             14%  ##
+    macOS / BSD       10%  ##
+    Network device     7%  #
+  Evidence   :
+    - Probe response: TCP RST (Closed-Port Fingerprinting)
+    - TCP window is 0 (standard closed-port RST response)
+    - RST with initial TTL 128 and window 0 strongly indicates Windows stack
+    - IP ID sequence is strictly incremental (deltas: [1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], avg: 1.1) (Windows sequential/global counter)
+    - Ambiguous/invalid TCP flags (SYN+FIN) silently dropped on open port but RST on closed port -- RFC 793 compliant Linux/Unix behavior
+    - ICMP Echo Reply normalized Code=0 (Code 9 probe) with TTL=128, U1 quotes 328B -- characteristic of Windows stack
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 50
+  Open          : 0
+  Closed        : 50
+  Filtered/NR   : 0
+  Banners found : 0/0
+  OS guess      : Windows (69%)
+═════════════════════════════════════════════════════════════════
