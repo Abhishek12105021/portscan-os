@@ -12,8 +12,9 @@ $env:PYTHONIOENCODING = "utf-8"
 $TARGET_IP = "192.168.1.104"  # <-- Change this to your target IP if needed
 $ADAPTER   = "\Device\NPF_{79613882-4F62-495C-9891-92E06A2C6E9B}"  # Realtek Wi-Fi Adapter
 
-$LOG_DIR   = Join-Path $PSScriptRoot "final-log"
-$LOG_FILE  = Join-Path $LOG_DIR "scan_100_ports.log"
+$PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
+$LOG_DIR      = Join-Path $PROJECT_ROOT "final-log"
+$LOG_FILE     = Join-Path $LOG_DIR "scan_100_ports.log"
 
 if (-not $TARGET_IP) {
     Write-Host "[!] Please set your `$TARGET_IP at the top of the script before running." -ForegroundColor Yellow

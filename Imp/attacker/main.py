@@ -612,7 +612,7 @@ def phase5_exploits(args, open_ports, banner_results):
 
         ssh_result = ssh_bruteforce.run(
             args.target, port=22, banner_info=banner_map.get(22),
-            delay=1.0,
+            delay=1.0, mode=getattr(args, "ssh_mode", "loud"),
         )
         exploit_results.append(ssh_result)
 
@@ -722,6 +722,8 @@ def main():
                     help="Delay between exploit attempts (default: 1.0)")
     p.add_argument("--prefer-icmp", action="store_true",
                     help="Force using ICMP Echo Reply as primary fingerprint candidate (demo/firewall test)")
+    p.add_argument("--ssh-mode", choices=["quiet", "stealth", "loud", "full"], default="loud",
+                    help="SSH attack mode: 'quiet'/'stealth' (recon only) or 'loud'/'full' (payloads + voice)")
 
     args = p.parse_args()
 

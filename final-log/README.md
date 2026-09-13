@@ -14,6 +14,8 @@ This directory isolates the **crucial, legitimate test logs** that capture the c
 | **4** | [`ipad.log`](file:///final-log/ipad.log) | **Apple iPad** | iPadOS 17 / Darwin BSD (`192.168.0.152`) | `80, 8080` | 1 Open (`80` VLC Web),<br>1 Closed (`8080`) | **OFF / Passive** | **OFF / Skipped**<br>(`--skip-exploits`) | **macOS / BSD (48%)**<br>(TTL 64, Darwin Option Order: WSCALE before TIMESTAMP) |
 | **5** | [`phn.log`](file:///final-log/phn.log) | **Android Smartphone** | Android / Linux Kernel 5.x (`192.168.0.169`) | `2221, 2122` | 1 Open (`2221` WiFi FTP),<br>1 Closed (`2122`) | **OFF / Passive** | **OFF / Skipped**<br>(`--skip-exploits`) | **Linux (58%)**<br>(TTL 64, Linux Option Order: SACK before TIMESTAMP, IP ID = 0) |
 | **6** | [`scan_100_ports.log`](file:///final-log/scan_100_ports.log) | **Live 100-Port Scale Test** | Windows 10/11 Target (`192.168.1.104`) | `100 Ports`<br>(2 batches of 50) | • **Batch 1**: 4 Open (`135, 139, 445, 1025`), 46 Closed<br>• **Batch 2**: 50 Closed | **OFF / Passive** (Firewall disabled) | **OFF / Skipped**<br>(`--skip-exploits`) | **Windows (71% & 69%)**<br>• Batch 1 (SYN/ACK): 71% (1001 Hz clock, Windows Option Order)<br>• Batch 2 (RST): 69% (Strict incremental IP ID, Win=0) |
+| **7** | [`ssh_quiet.log`](file:///final-log/ssh_quiet.log) | **Windows Target** (SSH Quiet Mode) | Windows 11 (`192.168.1.104` — `AisheePC`) | `22` (SSH) | 1 Open (`22`) | **OFF / Passive** | **ON & SUCCESSFUL**<br>✓ SSH Brute Force (`test:test123`)<br>• Silent Recon (`whoami`, `hostname`, `ipconfig`, `ver`) | **Windows (75%)**<br>(SYN/ACK: TTL 128, OpenSSH banner, 1000 Hz clock, Strict incremental IP ID) |
+| **8** | [`ssh_attack.log`](file:///final-log/ssh_attack.log) | **Windows Target** (SSH Loud Mode) | Windows 11 (`192.168.1.104` — `AisheePC`) | `22` (SSH) | 1 Open (`22`) | **OFF / Passive** | **ON & SUCCESSFUL**<br>✓ SSH Brute Force (`test:test123`)<br>• Spooky Trophy File (`PROOF_OF_ACCESS.txt`)<br>• 1000-Loop Payloads (`.exe`, `.bat`, `.py`)<br>• Physical Voice Alert on Speakers | **Windows (75%)**<br>(SYN/ACK: TTL 128, OpenSSH banner, 1000 Hz clock, Strict incremental IP ID) |
 
 ---
 
@@ -70,3 +72,40 @@ This directory isolates the **crucial, legitimate test logs** that capture the c
 - **Batch 2 (High Ports, Web Apps, RPC & Cloud/Dev Services 1883–49164):**
   - **Closed Ports (50):** All 50 probed ports were genuinely closed, immediately emitting `CLOSED TTL=128 WIN=0`.
   - **Fingerprint Attribution:** Candidate `Closed-Port TCP RST` (Idea 1 Zero-Open-Port Detection) identified **Windows (69% confidence)** powered by strict incremental IP ID sequence (`[13207, 13208, ...]`, avg delta: 1.1), zero window size, and initial TTL 128.
+
+### 7. `ssh_quiet.log` — Windows SSH Weak Credential Exploitation (Quiet / Stealth Mode)
+- **Purpose:** Proves remote code execution (RCE) via SSH brute-force in a non-intrusive, covert manner suitable for quiet penetration testing and automated inventory auditing.
+- **Target:** Live Windows 11 machine (`192.168.1.104` — `AisheePC`) running Microsoft OpenSSH for Windows (`SSH-2.0-OpenSSH_for_Windows_9.5`) on port 22.
+- **Fingerprinting:** Candidate `Open-Port TCP SYN/ACK` identified **Windows (75% confidence)** via:
+  - Initial TTL=128, TCP window=65535, DF=1.
+  - Windows TCP option ordering: `['MSS', 'WSCALE', 'SACK_PERMITTED', 'TIMESTAMP']`.
+  - Strict incremental IP ID sequence (`deltas: [2, 1]`).
+  - Cross-layer banner signature correlation: `OpenSSH_for_Windows` matched Windows Microsoft OpenSSH signature.
+  - Timestamp clock frequency: ~992.1 Hz (`HZ_1000`, standard 1ms Windows tick rate).
+  - Invalid TCP flags (`SYN+FIN` rule-breaker): Elicited `RST` on open port (Flags `0x14`).
+  - ICMP Code 0 normalization and 328-byte UDP quoting.
+- **Exploit Execution (Quiet Mode):**
+  - Brute-forced bounded 20-pair credential wordlist.
+  - Successfully authenticated as `test:test123` on attempt 15.
+  - Executed command-line reconnaissance:
+    - `whoami` $\to$ `aisheepc\test`
+    - `hostname` $\to$ `AisheePC`
+    - `ipconfig` $\to$ `169.254.17.114, 169.254.58.27, 192.168.1.104`
+    - `os_info` $\to$ `Microsoft Windows [Version 10.0.26200.9445]`
+  - **Zero noise:** No files written to the desktop, zero audio alerts triggered.
+
+### 8. `ssh_attack.log` — Windows SSH Weak Credential Exploitation (Loud / Full Attack Mode)
+- **Purpose:** Demonstrates full multi-modal post-exploitation, dropping persistent interactive desktop payloads and triggering hardware-level audio alerts to prove undeniable control of the target machine.
+- **Target:** Live Windows 11 machine (`192.168.1.104` — `AisheePC`) running OpenSSH on port 22.
+- **Fingerprinting:** Identifies Windows (75% confidence) with identical high-confidence empirical features.
+- **Exploit Execution (Loud Mode):**
+  - Successfully authenticated as `test:test123` (attempt 15/20).
+  - **Spooky Desktop Trophy:** Deployed `PROOF_OF_ACCESS.txt` on the Desktop with the security warning:
+    > *"Abhishek and Turjo have taken over your computer for their Security project! You should be careful with SSH xd"*
+  - **Interactive 1000-Loop Payloads (3 formats):** Base64-encoded and deployed 3 double-clickable executables directly onto `C:\Users\test\Desktop` and `C:\Users\Public\Desktop`:
+    1. `HACKED.exe`: Native Windows executable compiled on the fly using Windows' built-in `csc.exe` compiler.
+    2. `HACKED.bat`: Native Windows batch script.
+    3. `hacked.py`: Python exploit script.
+    *(When double-clicked, Windows opens a Command Prompt console with matrix neon-green font, streaming a 1000-iteration loop: `[1000/1000] YOU ARE HACKED BY ABHISHEK AND TURJO xd` with a typewriter animation before holding the terminal open).*
+  - **Physical Speech Synthesizer Voice Alert:** Sent synthesized audio commands through the victim PC's sound card and physical speakers:
+    > *"Warning. Abhishek and Turjo have taken over your computer for their Security project. You should be careful with S-S-H. haha."*

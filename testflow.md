@@ -79,6 +79,29 @@ python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE
 
 ---
 
+### Terminal 4: OpenSSH Server (For SSH Weak Credential Exploit Testing)
+*(Run in an Administrator PowerShell on Desktop / Victim to prepare for Phase 5 SSH Exploit)*
+```powershell
+# 1. Start Windows OpenSSH Server service
+Start-Service sshd
+
+# 2. Create the vulnerable lab test account with weak credentials
+net user test test123 /add
+
+# 3. (Optional) Grant admin rights to test user so desktop files appear on all screens
+net localgroup administrators test /add
+```
+*Expected status:* Service `sshd` is running on port 22 (`Get-Service sshd` shows `Running`).
+
+> **Victim Cleanup (After Testing):**
+> When testing is complete, restore the victim machine to its clean baseline:
+> ```powershell
+> Stop-Service sshd
+> net user test /delete
+> ```
+
+---
+
 ## 2. Laptop (Attacker) Execution — Step-by-Step
 
 On your Laptop, open an **Administrator PowerShell** and run the following commands:
@@ -266,6 +289,73 @@ netsh advfirewall set allprofiles state on
 
 ---
 
+### TEST 4: SSH Weak Credential Exploitation — Quiet Mode (Stealth Recon) ⭐
+
+This test evaluates non-intrusive post-exploitation over an encrypted SSH tunnel. It proves valid authentication and gathers basic reconnaissance without creating user-visible files or generating audio alerts on the victim machine.
+
+#### Step 4.1: Run Quiet Attack From Laptop
+```powershell
+# Run from project root in Administrator PowerShell:
+.\scripts\test_ssh_attack.ps1 quiet
+```
+*(Or pass `-Mode quiet`)*
+
+#### Step 4.2: Verified Output Lifecycle
+1. **Phase 1 (SYN Port Scan):** Port 22 discovered `OPEN` (TTL=128, WIN=65535).
+2. **Phase 2 (Service Banner Grabbing):** Grabs service banner:
+   `✓ 22 SSH → SSH-2.0-OpenSSH_for_Windows_9.5`
+3. **Phase 3 (OS Fingerprinting):** Identifies Windows (75% confidence) via TCP options, strict incremental IP ID sequence, and 1000 Hz timestamp frequency.
+4. **Phase 5 (SSH Weak Credential Attack):**
+   - Brute-forces bounded top-20 dictionary.
+   - Cracks credentials `test:test123` on attempt 15.
+   - Executes silent command-line reconnaissance:
+     - `whoami` $\to$ `aisheepc\test`
+     - `hostname` $\to$ `AisheePC`
+     - `ipconfig` $\to$ `169.254.17.114, 169.254.58.27, 192.168.1.104`
+     - `os_info` $\to$ `Microsoft Windows [Version 10.0.26200.9445]`
+5. **Log File:** Saved cleanly to [`final-log/ssh_quiet.log`](file:///final-log/ssh_quiet.log).
+
+---
+
+### TEST 5: SSH Weak Credential Exploitation — Loud Mode (Spooky Payloads & Voice Alert) ⭐
+
+This test demonstrates full interactive post-exploitation capabilities with multi-modal physical and visual proof of remote code execution (RCE) on the victim machine.
+
+#### Step 5.1: Run Loud Attack From Laptop
+```powershell
+# Run from project root in Administrator PowerShell:
+.\scripts\test_ssh_attack.ps1 loud
+# (or simply .\scripts\test_ssh_attack.ps1, as loud is the default mode)
+```
+
+#### Step 5.2: What Happens on the Victim Machine
+1. **Remote Execution:** Logs in via SSH as `test:test123`.
+2. **Desktop Trophy File:** Drops `PROOF_OF_ACCESS.txt` on the Desktop (`C:\Users\test\Desktop` & `C:\Users\Public\Desktop`):
+   ```text
+   ====================================================================
+     [!] CRITICAL SECURITY ALERT: SYSTEM COMPROMISED
+   ====================================================================
+
+     Abhishek and Turjo have taken over your computer for their Security project!
+     You should be careful with SSH xd
+
+     Victim Host : AisheePC
+     User Account: test
+     Timestamp   : 2026-09-13 23:56:30
+     Status      : Remote Code Execution Confirmed
+   ====================================================================
+   ```
+3. **Interactive 1000-Loop Payloads:** Deploys 3 double-clickable executables/scripts:
+   - `HACKED.exe`: Real Windows executable compiled on the fly via Windows' native `csc.exe`.
+   - `HACKED.bat`: Native Windows batch executable.
+   - `hacked.py`: Python exploit script.
+   *(When double-clicked by anyone on the victim machine, a Command Prompt window pops open, text turns Matrix neon-green, and a loop streams 1000 times: `[1000/1000] YOU ARE HACKED BY ABHISHEK AND TURJO xd` with a typewriter animation!)*
+4. **Spooky Audio Voice Alert:** Calls Windows' native Speech Synthesizer API (`System.Speech.Synthesis`) through the victim device's sound card/speakers:
+   > *"Warning. Abhishek and Turjo have taken over your computer for their Security project. You should be careful with S-S-H. haha."*
+5. **Log File:** Saved cleanly to [`final-log/ssh_attack.log`](file:///final-log/ssh_attack.log).
+
+---
+
 ## 3. Standalone / Targeted Commands (For Quick Checks)
 
 ### Standalone Closed-Port RST Fingerprint Scan:
@@ -283,14 +373,23 @@ python attacker\exploits\http_traversal.py --target 192.168.0.116 --port 80
 python attacker\exploits\ftp_anon.py --target 192.168.0.116 --port 21
 ```
 
+### Standalone SSH Attack (Automated Runner):
+```powershell
+# Quiet Mode (Recon Only)
+.\scripts\test_ssh_attack.ps1 quiet
+
+# Loud Mode (Spooky Payloads + Voice Alert)
+.\scripts\test_ssh_attack.ps1 loud
+```
+
 ### Standalone Banner Grabbing:
 ```powershell
-python attacker\banner.py --target 192.168.0.116 --ports 21 80
+python attacker\banner.py --target 192.168.0.116 --ports 21 22 80
 ```
 
 ### Standalone SYN Scanner (Skip Banners and Exploits):
 ```powershell
-python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 80 --skip-banners --skip-exploits
+python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 --skip-banners --skip-exploits
 ```
 
 ---
@@ -314,6 +413,12 @@ When done testing or to unblock the Laptop on Desktop:
    netsh advfirewall set allprofiles state on
    ```
 4. To stop HTTP or FTP servers: Press `Ctrl+C` in their respective windows.
+5. To stop OpenSSH Server & clean up lab test account:
+   ```powershell
+   Stop-Service sshd
+   net user test /delete
+   Remove-Item C:\Users\test -Recurse -Force -ErrorAction SilentlyContinue
+   ```
 
 ---
 
@@ -329,6 +434,7 @@ When done testing or to unblock the Laptop on Desktop:
 | `--skip-banners` | Switch flag | Skip Phase 2 application banner grabbing. |
 | `--skip-exploits`| Switch flag | Skip Phase 5 exploit execution. |
 | `--exploit-delay`| Float | Delay between exploit attempts (default: `1.0s`). |
+| `--ssh-mode` | `quiet`, `loud` | SSH exploit mode: `quiet` (silent recon) or `loud` (payloads + voice). |
 | `--block` | Switch flag (Defense) | Enable dynamic Windows Firewall auto-quarantine. |
 | `--threshold` | Int ($\ge 2$) (Defense) | Number of SYN probes within window to alert (default: `8`). |
 | `--window` | Float ($> 0$) (Defense) | Sliding window interval in seconds (default: `10.0s`). |
@@ -345,6 +451,8 @@ This section provides the complete, independently documented record of the final
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Desktop** | Windows 11 Pro | `192.168.0.116` | `21 22 80 81` | **Windows (60%)** | TTL 128, Windows Option Order, Exploits 2/2 OK |
 | **Desktop** | Windows 11 (with Blocker) | `192.168.0.116` | `21-24, 80-84` | **Windows (60%)** | 7 Ports Filtered, HTTP Exploit Blocked (FAILED ✗) |
+| **Desktop** | Windows 11 (SSH Quiet) | `192.168.1.104` | `22` | **Windows (75%)** | Port 22 Open, `OpenSSH_for_Windows` banner, Silent Recon OK |
+| **Desktop** | Windows 11 (SSH Loud) | `192.168.1.104` | `22` | **Windows (75%)** | Port 22 Open, Trophy File, 1000-Loop Payloads, Voice Alert OK |
 | **Apple iPad** | iPadOS 17+ (Darwin / BSD) | `192.168.0.152` | `80 81` | **macOS / BSD (48% / 100% Tier)** | TTL 64, Darwin Option Order (`WSCALE` before `TIMESTAMP`) |
 | **Android Phone** | Android (Linux Kernel 5.x) | `192.168.0.169` | `2221 2122` | **Linux (58% / 100% Tier)** | TTL 64, Linux Option Order, `IP ID = 0` (RFC 6864) |
 | **Android Phone**| Android (Closed Ports Only)| `192.168.0.169` | `2121 2122` | **Linux (67% Closed RST)** | TTL 64, Window 0, `IP ID = 0` via TCP RST |
@@ -545,6 +653,71 @@ This section provides the complete, independently documented record of the final
       - RST with initial TTL 64 indicates Linux/macOS/BSD stack
       - IP ID is 0 with DF set (RFC 6864, characteristic of Linux)
   ```
+
+---
+
+### Run 6.6: Windows Live SSH Weak Credential Exploitation (Quiet & Loud Modes)
+
+* **Target:** `192.168.1.104` (Windows 11 Target PC — `AisheePC`)
+* **Service Running:** Windows OpenSSH Server daemon (`sshd.exe`) listening on port 22
+* **Attack Suite:** [scripts/test_ssh_attack.ps1](file:///scripts/test_ssh_attack.ps1)
+
+#### Sub-Run 6.6.1: Quiet Mode (Stealth Reconnaissance)
+* **Command:**
+  ```powershell
+  .\scripts\test_ssh_attack.ps1 quiet
+  ```
+* **Empirical Log Excerpt ([final-log/ssh_quiet.log](file:///final-log/ssh_quiet.log)):**
+  ```text
+  ─────────────────────────────────────────────────────────────────
+       22  OPEN                           TTL=128 WIN=65535
+
+    [PHASE 2] Service Banner Grabbing
+    ✓    22  SSH      → SSH-2.0-OpenSSH_for_Windows_9.5
+
+    [PHASE 3] OS Fingerprinting
+    Candidate  : Open-Port TCP SYN/ACK
+    Likely OS  : Windows
+    Confidence : 75%
+    Version    : Windows 10 / 11 / Server 2016+
+
+    [PHASE 5] Exploit Execution
+    [EXPLOIT] SSH Weak Credentials (port 22)
+    Status   : SUCCESS ✓
+    Detail   : Logged in as test:test123 (attempt 15/20)
+    Attempts : 15
+    Commands :
+      whoami   → aisheepc\test
+      hostname → AisheePC
+      ipconfig → 169.254.17.114, 169.254.58.27, 192.168.1.104
+      os_info  → Microsoft Windows [Version 10.0.26200.9445]
+  ```
+
+#### Sub-Run 6.6.2: Loud Mode (Spooky Payloads & Voice Alert)
+* **Command:**
+  ```powershell
+  .\scripts\test_ssh_attack.ps1 loud
+  ```
+* **Empirical Log Excerpt ([final-log/ssh_attack.log](file:///final-log/ssh_attack.log)):**
+  ```text
+    [PHASE 5] Exploit Execution
+    [EXPLOIT] SSH Weak Credentials (port 22)
+    Status   : SUCCESS ✓
+    Detail   : Logged in as test:test123 (attempt 15/20)
+    Attempts : 15
+    Commands :
+      whoami          → aisheepc\test
+      hostname        → AisheePC
+      ipconfig        → 169.254.17.114, 169.254.58.27, 192.168.1.104
+      os_info         → Microsoft Windows [Version 10.0.26200.9445]
+      desktop_proof   → Spooky trophy file PROOF_OF_ACCESS.txt created on Desktop
+      hacked_payloads → Interactive payloads (HACKED.exe, HACKED.bat, hacked.py) created on Desktop
+      voice_alert     → Spooky voice alert played on victim speakers
+  ```
+* **Physical & Visual Demonstration Results:**
+  1. `PROOF_OF_ACCESS.txt` created with security alert attribution: *"Abhishek and Turjo have taken over your computer for their Security project. You should be careful with SSH xd"*.
+  2. `HACKED.exe`, `HACKED.bat`, and `hacked.py` dropped on the Desktop. Double-clicking any launches an animated Matrix-green 1000-iteration loop in a Command Prompt console.
+  3. Physical speakers on the target machine synthesize and speak the voice warning aloud.
 
 ---
 
