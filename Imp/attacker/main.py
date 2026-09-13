@@ -51,7 +51,7 @@ from common.npcap import (
 from fingerprint import fingerprint
 from banner import grab_banners
 from exploits import (
-    ftp_anon, ftp_web_shell, ftp_bounce, http_traversal, os_payloads,
+    ftp_anon, ftp_web_shell, ftp_bounce, ssh_bruteforce, http_traversal, os_payloads,
 )
 
 
@@ -631,10 +631,6 @@ def phase5_exploits(args, open_ports, banner_results, os_family="Unknown"):
             bounce_port=bounce_port,
             scan_ports=[80, 443, 445, 3389],
             banner_info=banner_map.get(21),
-
-        ssh_result = ssh_bruteforce.run(
-            args.target, port=22, banner_info=banner_map.get(22),
-            delay=1.0, mode=getattr(args, "ssh_mode", "loud"),
         )
         exploit_results.append(r)
         print(f"  Status  : {'SUCCESS ✓' if r['success'] else 'FAILED ✗'}")
@@ -642,6 +638,26 @@ def phase5_exploits(args, open_ports, banner_results, os_family="Unknown"):
         for probe in r["probes"]:
             print(f"    {probe['target']}:{probe['port']} -> "
                   f"{probe['outcome']}")
+        time.sleep(args.exploit_delay)
+
+    # --- Exploit: SSH Weak Credentials ---
+    if 22 in open_ports:
+        print(f"\n  {SUB_SEP}")
+        print(f"  [EXPLOIT] SSH Weak Credentials (port 22)")
+        print(f"  {SUB_SEP}")
+        ssh_result = ssh_bruteforce.run(
+            args.target, port=22, banner_info=banner_map.get(22),
+            delay=1.0, mode=getattr(args, "ssh_mode", "loud"),
+        )
+        exploit_results.append(ssh_result)
+        status = "SUCCESS ✓" if ssh_result["success"] else "FAILED ✗"
+        print(f"  Status   : {status}")
+        print(f"  Detail   : {ssh_result['detail']}")
+        print(f"  Attempts : {ssh_result['attempts']}")
+        if ssh_result["success"] and ssh_result.get("command_output"):
+            print(f"  Commands :")
+            for cmd, output in ssh_result["command_output"].items():
+                print(f"    {cmd} → {output[:80]}")
         time.sleep(args.exploit_delay)
 
     # --- Exploit 4: HTTP traversal (OS-aware) ---
@@ -725,23 +741,14 @@ def main():
                    help="One explicitly authorized private IPv4 target")
     p.add_argument("--ports", required=True, nargs="+", type=int,
                    help="Ports to scan (max 50)")
-    p.add_argument("--timeout", type=float, default=1.5)
-    p.add_argument("--delay", type=float, default=0.5)
-    p.add_argument("--source-port", type=int, default=40000)
-    p.add_argument("--seed", type=int, default=406)
-    p.add_argument("--skip-banners", action="store_true")
-    p.add_argument("--skip-exploits", action="store_true")
-    p.add_argument("--exploit-delay", type=float, default=1.0)
-    p.add_argument("--prefer-icmp", action="store_true")
-                    help="Ports to scan (max 50)")
     p.add_argument("--timeout", type=float, default=1.5,
-                    help="Per-port SYN timeout in seconds (default: 1.5)")
+                   help="Per-port SYN timeout in seconds (default: 1.5)")
     p.add_argument("--delay", type=float, default=0.5,
-                    help="Delay between SYN probes in seconds (default: 0.5)")
+                   help="Delay between SYN probes in seconds (default: 0.5)")
     p.add_argument("--source-port", type=int, default=40000,
-                    help="Starting source port for probes (default: 40000)")
+                   help="Starting source port for probes (default: 40000)")
     p.add_argument("--seed", type=int, default=406,
-                    help="RNG seed for sequence numbers (default: 406)")
+                   help="RNG seed for sequence numbers (default: 406)")
     p.add_argument("--skip-banners", action="store_true",
                     help="Skip banner grabbing phase")
     p.add_argument("--skip-exploits", action="store_true",
