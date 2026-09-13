@@ -40,6 +40,14 @@ class FTPSession(threading.Thread):
         self.root = os.path.abspath(root_dir)
         self.cwd = "/"
         self.server_ip = server_ip
+        if not self.server_ip or self.server_ip == "127.0.0.1":
+            try:
+                if client_sock:
+                    sock_name = client_sock.getsockname()[0]
+                    if sock_name and not sock_name.startswith("127."):
+                        self.server_ip = sock_name
+            except Exception:
+                pass
         self.logged_in = False
 
         # Data channel state — one of: "pasv" (listen) or "port" (dial out)
@@ -416,6 +424,8 @@ def main():
     parser.add_argument("--port", type=int, default=21)
     parser.add_argument("--root", type=str, default="./lab_root")
     parser.add_argument("--bind", type=str, default="0.0.0.0")
+    parser.add_argument("--server-ip", type=str, default=None,
+                        help="Explicit IP to advertise in PASV (auto-detected if omitted)")
     args = parser.parse_args()
 
     # Ensure root + uploads directory exist with sample files.
@@ -438,13 +448,16 @@ def main():
             f.write("backup:BackupPass456\n")
 
     # Discover server IP for PASV responses.
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        server_ip = s.getsockname()[0]
-        s.close()
-    except OSError:
-        server_ip = "127.0.0.1"
+    if args.server_ip:
+        server_ip = args.server_ip
+    else:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            server_ip = s.getsockname()[0]
+            s.close()
+        except OSError:
+            server_ip = "127.0.0.1"
 
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
