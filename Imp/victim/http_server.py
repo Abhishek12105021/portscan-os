@@ -140,8 +140,11 @@ class HTTPSession(threading.Thread):
                 self._send_error(405, "Method Not Allowed")
                 return
 
+            # Split query string from URL before mapping to filesystem.
+            url_path = raw_path.split("?", 1)[0]
+
             # INTENTIONAL VULNERABILITY: no ".." sanitisation here.
-            decoded_path = raw_path
+            decoded_path = url_path
             for enc, dec in (("%2f", "/"), ("%2F", "/"),
                              ("%5c", "\\"), ("%5C", "\\"),
                              ("%2e", "."), ("%2E", ".")):
@@ -162,7 +165,7 @@ class HTTPSession(threading.Thread):
                 if os.path.isfile(index):
                     self._serve_file(index, method)
                 else:
-                    self._serve_directory(file_path, raw_path, method)
+                    self._serve_directory(file_path, url_path, method)
             else:
                 self._send_error(404, "Not Found")
 
