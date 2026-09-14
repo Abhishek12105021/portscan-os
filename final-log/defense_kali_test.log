@@ -1,0 +1,334 @@
+# =============================================================================
+# EMPIRICAL LAB LOG: KALI LINUX DEFENSE & ACTIVE IPTABLES MITIGATION
+# Project: Custom Port Scanner, OS Fingerprinting, Exploits & Defense Mitigation
+# Target Host: Kali Linux VM (Victim) — 192.168.56.101 (MAC: 08:00:27:5a:87:bc)
+# Attacker Host: Windows 11 Laptop (Attacker) — 192.168.56.1 (MAC: 0a:00:27:00:00:0e)
+# Network Environment: VirtualBox Host-Only Ethernet (Subnet 192.168.56.0/24)
+# Date: September 14, 2026
+# Status: ALL SCENARIOS (A THROUGH G) EMPIRICALLY TESTED AND VERIFIED
+# =============================================================================
+
+# =============================================================================
+# 1. TEST TOPOLOGY & NETWORK CONFIGURATION
+# =============================================================================
+#
+# Attacker Node (Windows 11 Laptop):
+#   - IPv4 Address: 192.168.56.1
+#   - Hardware MAC: 0a:00:27:00:00:0e
+#   - Interface: VirtualBox Host-Only Ethernet Adapter
+#   - Npcap Adapter: \Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}
+#   - Python Runtime: Python 3.12.6
+#   - Script: python attacker/main.py
+#
+# Victim Node (Kali Linux VM):
+#   - IPv4 Address: 192.168.56.101
+#   - Hardware MAC: 08:00:27:5a:87:bc
+#   - Interface: eth0 (libpcap runtime: /usr/lib/x86_64-linux-gnu/libpcap.so.0.8)
+#   - Python Runtime: Python 3.13.9
+#   - Defense Engine: sudo python3 defense/main.py --adapter eth0
+#   - Active Services: HTTP (80), FTP (21), OpenSSH (22)
+#   - Mitigation Mechanism: Linux Netfilter (Dynamic iptables -I INPUT ... -j DROP)
+#
+# =============================================================================
+
+
+# =============================================================================
+# 2. SCENARIO A: FAST SYN SCAN DETECTION (W1 = 10.0s, Threshold = 8 SYNs / 5 Ports)
+# =============================================================================
+#
+# Objective:
+#   Verify that rapid port scans exceeding 8 SYNs across 5 distinct ports within
+#   10 seconds trigger an immediate threshold alert and firewall quarantine.
+#
+# Victim Command (Kali Linux):
+#   sudo python3 defense/main.py --adapter eth0 --block --block-ttl 60
+#
+# Attacker Command (Windows Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 21 22 80 135 139 443 445 8080 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Kali Linux):
+# -----------------------------------------------------------------------------
+# ═════════════════════════════════════════════════════════════════
+#   ADAPTIVE MULTI-VECTOR PORT-SCAN DETECTOR & DEFENSE ENGINE      
+# ═════════════════════════════════════════════════════════════════
+#   Adapter          : eth0
+#   Fast Window      : 8 SYNs across 5 ports within 10.0s
+#   Slow Window      : 20 SYNs within 60.0s
+#   Canary Ports     : [81]
+#   Whitelist        : (none)
+#   Firewall Action  : ENABLED (Auto-Quarantine)
+#   Quarantine TTL   : 60.0s auto-release (Self-Healing)
+# ═════════════════════════════════════════════════════════════════
+#
+# Waiting for network probes. Press Ctrl+C to stop.
+#
+# SYN 192.168.56.1    -> 192.168.56.101:21    window_count=1   distinct_ports=1  
+# SYN 192.168.56.1    -> 192.168.56.101:22    window_count=2   distinct_ports=2  
+# SYN 192.168.56.1    -> 192.168.56.101:80    window_count=3   distinct_ports=3  
+# SYN 192.168.56.1    -> 192.168.56.101:135   window_count=4   distinct_ports=4  
+# SYN 192.168.56.1    -> 192.168.56.101:139   window_count=5   distinct_ports=5  
+# SYN 192.168.56.1    -> 192.168.56.101:443   window_count=6   distinct_ports=6  
+# SYN 192.168.56.1    -> 192.168.56.101:445   window_count=7   distinct_ports=7  
+# SYN 192.168.56.1    -> 192.168.56.101:8080  window_count=8   distinct_ports=8  
+# [ALERT] 192.168.56.1    | fast port scan (SYN=8, distinct ports=8 within 10.0s)
+# [MITIGATION] Blocked TCP traffic from 192.168.56.1
+#              Firewall rule : CustomPortScanBlock_192_168_56_1 (Linux)
+#              Trigger reason: fast port scan (SYN=8, distinct ports=8 within 10.0s)
+#              Auto-release  : after 60s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows Laptop):
+# -----------------------------------------------------------------------------
+# - Phase 1: Ports 21, 22, 80 responded OPEN before packet 8.
+# - Phase 2: Banner grabbing on ports 21, 22, 80 TIMED OUT completely:
+#     ✗    21  Unknown  → (connect failed: timed out)
+#     ✗    22  Unknown  → (connect failed: timed out)
+#     ✗    80  Unknown  → (connect failed: timed out)
+# - Netfilter dropped subsequent TCP connections from 192.168.56.1 in the kernel.
+# =============================================================================
+
+
+# =============================================================================
+# 3. SCENARIO B: CANARY HONEYPORT TRAP (Decoy Honeyport 81 Instant Quarantine)
+# =============================================================================
+#
+# Objective:
+#   Demonstrate zero-delay threat severance without waiting for threshold accum-
+#   ulation when an attacker touches unassigned canary port 81.
+#
+# Victim Command (Kali Linux):
+#   sudo python3 defense/main.py --adapter eth0 --canary-ports 81 --block --block-ttl 60
+#
+# Attacker Command (Windows Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 21 22 80 81 135 139 443 445 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Kali Linux):
+# -----------------------------------------------------------------------------
+# SYN 192.168.56.1    -> 192.168.56.101:21    window_count=1   distinct_ports=1  
+# SYN 192.168.56.1    -> 192.168.56.101:22    window_count=2   distinct_ports=2  
+# SYN 192.168.56.1    -> 192.168.56.101:80    window_count=3   distinct_ports=3  
+# SYN 192.168.56.1    -> 192.168.56.101:81    window_count=1   distinct_ports=1  
+# [ALERT] 192.168.56.1    | hit canary honeyport (81)
+# [MITIGATION] Blocked TCP traffic from 192.168.56.1
+#              Firewall rule : CustomPortScanBlock_192_168_56_1 (Linux)
+#              Trigger reason: hit canary honeyport (81)
+#              Auto-release  : after 60s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows Laptop):
+# -----------------------------------------------------------------------------
+# - Phase 1 (SYN Scan):
+#      21  OPEN                           TTL= 64 WIN=65160
+#      22  OPEN                           TTL= 64 WIN=65160
+#      80  OPEN                           TTL= 64 WIN=65160
+#      81  CLOSED                         TTL= 64 WIN=0 (Decoy trip)
+#     135  NO RESPONSE / POSSIBLY FILTERED (Firewall dropped probe)
+#     139  NO RESPONSE / POSSIBLY FILTERED (Firewall dropped probe)
+#     443  NO RESPONSE / POSSIBLY FILTERED (Firewall dropped probe)
+#     445  NO RESPONSE / POSSIBLY FILTERED (Firewall dropped probe)
+# - Ports probed after Port 81 were immediately blocked.
+# - Phase 2: All banner grabs timed out (0/3 banners found).
+# =============================================================================
+
+
+# =============================================================================
+# 4. SCENARIO C: LOW-AND-SLOW STEALTH SCAN (W2 = 60.0s, Threshold = 20 SYNs)
+# =============================================================================
+#
+# Objective:
+#   Prove that an evasive attacker using high delays (--delay 2.5) to bypass the
+#   10-second fast window is caught by the 60-second sliding stealth window.
+#
+# Victim Command (Kali Linux):
+#   sudo python3 defense/main.py --adapter eth0 --block --block-ttl 90
+#
+# Attacker Command (Windows Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 21 22 80 135 139 443 445 8080 8443 3306 5432 1433 1521 25 110 993 995 53 88 123 --delay 2.5 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Kali Linux):
+# -----------------------------------------------------------------------------
+# SYN 192.168.56.1    -> 192.168.56.101:21    window_count=1   distinct_ports=1  
+# SYN 192.168.56.1    -> 192.168.56.101:22    window_count=2   distinct_ports=2  
+# SYN 192.168.56.1    -> 192.168.56.101:80    window_count=3   distinct_ports=3  
+# SYN 192.168.56.1    -> 192.168.56.101:135   window_count=4   distinct_ports=4  
+# ... (Fast window resets periodically because probes are spaced 2.5s apart) ...
+# SYN 192.168.56.1    -> 192.168.56.101:123   window_count=4   distinct_ports=4  
+# [ALERT] 192.168.56.1    | slow stealth scan (SYN=20 within 60.0s)
+# [MITIGATION] Blocked TCP traffic from 192.168.56.1
+#              Firewall rule : CustomPortScanBlock_192_168_56_1 (Linux)
+#              Trigger reason: slow stealth scan (SYN=20 within 60.0s)
+#              Auto-release  : after 90s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows Laptop):
+# -----------------------------------------------------------------------------
+# - Ports probed after 123 received no response.
+# - Attacker stealth strategy defeated by dual-sliding window architecture.
+# =============================================================================
+
+
+# =============================================================================
+# 5. SCENARIO D: INVALID TCP FLAGS ANOMALY INSPECTION (SYN+FIN Rule-Breaker)
+# =============================================================================
+#
+# Objective:
+#   Detect and block non-compliant TCP flag combinations (RFC 793 violation)
+#   used by OS fingerprinting engines without waiting for rate thresholds.
+#
+# Victim Command (Kali Linux):
+#   sudo python3 defense/main.py --adapter eth0 --block
+#
+# Attacker Command (Windows Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 21 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Kali Linux):
+# -----------------------------------------------------------------------------
+# SYN 192.168.56.1    -> 192.168.56.101:21    window_count=1   distinct_ports=1  
+# SYN 192.168.56.1    -> 192.168.56.101:21    window_count=2   distinct_ports=1  
+# [CRITICAL ALERT] 192.168.56.1 -> 192.168.56.101:21 | invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21
+# [MITIGATION] Blocked TCP traffic from 192.168.56.1
+#              Firewall rule : CustomPortScanBlock_192_168_56_1 (Linux)
+#              Trigger reason: invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21
+#              Auto-release  : after 300s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows Laptop):
+# -----------------------------------------------------------------------------
+# - Phase 3 OS fingerprinting probe (SYN+FIN) was trapped immediately.
+# - Mitigation rule inserted on first invalid flag observation.
+# =============================================================================
+
+
+# =============================================================================
+# 6. SCENARIO E: TRUSTED WHITELISTING PROTECTION (False-Positive Immunity)
+# =============================================================================
+#
+# Objective:
+#   Confirm that whitelisted administrative or gateway IP addresses bypass
+#   all sliding windows and canary triggers to prevent accidental lockout.
+#
+# Victim Command (Kali Linux):
+#   sudo python3 defense/main.py --adapter eth0 --whitelist 192.168.56.1 --block
+#
+# Attacker Command (Windows Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 21 22 80 81 135 139 443 445 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Kali Linux):
+# -----------------------------------------------------------------------------
+# SYN 192.168.56.1    -> 192.168.56.101:21    window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:22    window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:80    window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:81    window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:135   window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:139   window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:443   window_count=0   distinct_ports=0  
+# SYN 192.168.56.1    -> 192.168.56.101:445   window_count=0   distinct_ports=0  
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows Laptop):
+# -----------------------------------------------------------------------------
+# - Full scan finished with 0 dropped packets.
+# - Banners retrieved successfully (3/3).
+# - Zero mitigation alerts triggered. Whitelist validation 100% successful.
+# =============================================================================
+
+
+# =============================================================================
+# 7. SCENARIO F: SELF-HEALING AUTO-RELEASE (TTL Expiry Verification)
+# =============================================================================
+#
+# Objective:
+#   Verify that quarantined hosts are automatically released after block-ttl
+#   expires without manual administrative intervention, even during idle network.
+#
+# Victim Command (Kali Linux):
+#   sudo python3 defense/main.py --adapter eth0 --block --block-ttl 60
+#
+# Attacker Command (Windows Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{97791388-568A-4124-AB80-5BF4BC58551D}" --target 192.168.56.101 --ports 21 22 80 135 139 443 445 8080 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Kali Linux):
+# -----------------------------------------------------------------------------
+# [ALERT] 192.168.56.1    | fast port scan (SYN=8, distinct ports=8 within 10.0s)
+# [MITIGATION] Blocked TCP traffic from 192.168.56.1
+#              Firewall rule : CustomPortScanBlock_192_168_56_1 (Linux)
+#              Trigger reason: fast port scan (SYN=8, distinct ports=8 within 10.0s)
+#              Auto-release  : after 60s (self-healing)
+# ... (60.0 seconds elapse with background ttl_monitor daemon running) ...
+# [MITIGATION] Released quarantine block on 192.168.56.1 (TTL 60s elapsed)
+#
+# -----------------------------------------------------------------------------
+# Post-Release Verification:
+# -----------------------------------------------------------------------------
+# - Checking iptables:
+#     sudo iptables -L INPUT -n -v
+#   Chain INPUT shows 0 DROP rules.
+# - Subsequent scan from laptop recovers normal network reachability.
+# =============================================================================
+
+
+# =============================================================================
+# 8. SCENARIO G: SOC AUDIT LOG & LINUX NETFILTER PACKET COUNTER AUDIT
+# =============================================================================
+#
+# Objective:
+#   Audit machine-readable SIEM/SOC incident records in defense_incident_log.json
+#   and verify that the Linux kernel DROP counters dynamically increment.
+#
+# -----------------------------------------------------------------------------
+# 1. Incident Audit Log (cat defense_incident_log.json on Kali):
+# -----------------------------------------------------------------------------
+# [
+#   {
+#     "timestamp": "2026-09-14T07:42:00.439638",
+#     "attacker_ip": "192.168.56.1",
+#     "reason": "hit canary honeyport (81)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_56_1",
+#     "platform": "linux",
+#     "ttl_seconds": 60.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T08:02:19.653972",
+#     "attacker_ip": "192.168.56.1",
+#     "reason": "slow stealth scan (SYN=20 within 60.0s)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_56_1",
+#     "platform": "linux",
+#     "ttl_seconds": 90.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T08:03:57.550941",
+#     "attacker_ip": "192.168.56.1",
+#     "reason": "invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21",
+#     "firewall_rule": "CustomPortScanBlock_192_168_56_1",
+#     "platform": "linux",
+#     "ttl_seconds": 300.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T08:23:05.772649",
+#     "attacker_ip": "192.168.56.1",
+#     "reason": "fast port scan (SYN=8, distinct ports=8 within 10.0s)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_56_1",
+#     "platform": "linux",
+#     "ttl_seconds": 60.0
+#   }
+# ]
+#
+# -----------------------------------------------------------------------------
+# 2. Kernel Drop Counter Progression (sudo iptables -L INPUT -n -v on Kali):
+# -----------------------------------------------------------------------------
+# Observation 1: 12 pkts, 648 bytes DROP tcp -- * * 192.168.56.1 0.0.0.0/0
+# Observation 2: 13 pkts, 708 bytes DROP tcp -- * * 192.168.56.1 0.0.0.0/0
+# Observation 3: 14 pkts, 768 bytes DROP tcp -- * * 192.168.56.1 0.0.0.0/0
+# Observation 4: 15 pkts, 828 bytes DROP tcp -- * * 192.168.56.1 0.0.0.0/0
+# Observation 5: 16 pkts, 888 bytes DROP tcp -- * * 192.168.56.1 0.0.0.0/0
+#
+# Conclusion:
+#   Netfilter packet drop counter explicitly proves that dropped packets are
+#   discarded in the Linux kernel before reaching socket user-space.
+# =============================================================================

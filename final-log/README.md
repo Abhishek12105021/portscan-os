@@ -18,6 +18,8 @@ This directory consolidates the **definitive, empirical verification logs** capt
 | **8** | [`scan_100_ports.log`](file:///final-log/scan_100_ports.log) | **Live 100-Port Scale Test** | Windows 10/11 Target (`192.168.1.104`) | `100 Ports`<br>(2 batches of 50) | • **Batch 1**: 4 Open (`135, 139, 445, 1025`), 46 Closed<br>• **Batch 2**: 50 Closed | **OFF / Passive** (Firewall disabled) | **OFF / Skipped**<br>(`--skip-exploits`) | **Windows (71% & 69%)**<br>• Batch 1 (SYN/ACK): 71% (1001 Hz clock, Windows Option Order)<br>• Batch 2 (RST): 69% (Strict incremental IP ID, Win=0) |
 | **9** | [`ssh_quiet.log`](file:///final-log/ssh_quiet.log) | **Windows Target** (SSH Quiet Mode) | Windows 11 (`192.168.1.104` — `AisheePC`) | `22` (SSH) | 1 Open (`22`) | **OFF / Passive** | **ON & SUCCESSFUL**<br>✓ SSH Brute Force (`test:test123`)<br>• Silent Recon (`whoami`, `hostname`, `ipconfig`, `ver`) | **Windows (75%)**<br>(SYN/ACK: TTL 128, OpenSSH banner, 1000 Hz clock, Strict incremental IP ID) |
 | **10** | [`ssh_attack.log`](file:///final-log/ssh_attack.log) | **Windows Target** (SSH Loud Mode) | Windows 11 (`192.168.1.104` — `AisheePC`) | `22` (SSH) | 1 Open (`22`) | **OFF / Passive** | **ON & SUCCESSFUL**<br>✓ SSH Brute Force (`test:test123`)<br>• Spooky Trophy File (`PROOF_OF_ACCESS.txt`)<br>• 1000-Loop Payloads (`.exe`, `.bat`, `.py`)<br>• Physical Voice Alert on Speakers | **Windows (75%)**<br>(SYN/ACK: TTL 128, OpenSSH banner, 1000 Hz clock, Strict incremental IP ID) |
+| **11** | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) | **Kali Linux VM** (Multi-Vector Defense & Netfilter Mitigation) | Debian GNU/Linux Kernel 6.x (`192.168.56.101`) | Probed across `21, 22, 80, 81, 135, 139, 443, 445, 8080` + 20 ports | Multi-Scenario Suite:<br>• Fast scan: 3 Open, 5 Closed $\to$ Dropped<br>• Canary: Trapped on Port 81<br>• Stealth: Trapped on Port 123 | **ON / Linux Netfilter**<br>(Dynamic `iptables -I INPUT ... -j DROP` with Auto-Release TTL) | **SEVERED / MITIGATED**<br>• Banner grabs timed out (0/3)<br>• OS probes dropped<br>• Exploit execution prevented | **Linux (55%–68%)**<br>(Attacker severing confirmed before reconnaissance completion) |
+| **12** | [`defense_win_test.log`](file:///final-log/defense_win_test.log) | **Windows 11 Desktop** (Multi-Vector Defense & Advanced Firewall) | Windows 11 Pro (`192.168.0.116`) | Probed across `21, 22, 80, 81, 135, 139, 443, 445, 8080` + 20 ports | Multi-Scenario Suite:<br>• Fast scan: 6 Open, 2 Closed $\to$ Quarantined<br>• Canary: Trapped on Port 81<br>• Stealth: Trapped on Port 123 | **ON / Windows Firewall**<br>(Dynamic `netsh advfirewall` inbound block with Auto-Release TTL) | **SEVERED / MITIGATED**<br>• Banners timed out post-block<br>• Handshakes aborted<br>• Exploit execution prevented | **Windows (71%–75%)**<br>(TTL 128, Win 65535, Strict incremental IP IDs `[34387...]`, 1001 Hz clock) |
 
 ---
 
@@ -158,9 +160,66 @@ This directory consolidates the **definitive, empirical verification logs** capt
 
 ---
 
+### 11. `defense_kali_test.log` — Kali Linux Multi-Vector Defense & Netfilter Suite (Scenarios A–G)
+- **Target Topology:** Debian GNU/Linux Kernel 6.x VM (`192.168.56.101`) over VirtualBox Host-Only Ethernet Adapter (`eth0`, libpcap `/usr/lib/x86_64-linux-gnu/libpcap.so.0.8`).
+- **Victim Defense Engine:** `sudo python3 defense/main.py --adapter eth0` with native Linux Netfilter dynamic rule injection (`iptables -I INPUT -s <IP> -p tcp -j DROP`).
+- **Scenario A (Fast SYN Scan Detection):**
+  - Probed ports `21, 22, 80, 135, 139, 443, 445, 8080`.
+  - On the 8th packet (port 8080), fast sliding window ($W_1 = 10.0s$, threshold 8 SYNs across 5 distinct ports) tripped immediately:
+    `[ALERT] 192.168.56.1 | fast port scan (SYN=8, distinct ports=8 within 10.0s)`.
+  - Kernel firewall rule `CustomPortScanBlock_192_168_56_1` injected; subsequent banner grabs timed out completely.
+- **Scenario B (Canary Honeyport Trap — Decoy Port 81 ⭐):**
+  - Probed ports `21, 22, 80, 81, 135, ...`.
+  - Without waiting for rate thresholds, touching unassigned decoy port 81 triggered zero-delay quarantine on packet 4:
+    `[ALERT] 192.168.56.1 | hit canary honeyport (81)`.
+  - Subsequent probes returned `NO RESPONSE / POSSIBLY FILTERED`.
+- **Scenario C (Low-and-Slow Stealth Scan — Slow Window $W_2 = 60.0s$):**
+  - Attacker used `--delay 2.5` to space 20 probes across 50 seconds to evade the 10-second fast window ($window\_count \le 4$).
+  - The 60-second slow sliding window caught the 20th packet (port 123):
+    `[ALERT] 192.168.56.1 | slow stealth scan (SYN=20 within 60.0s)`.
+- **Scenario D (Invalid Flag Anomaly Probing — RFC 793 SYN+FIN):**
+  - OS fingerprinting probe emitted ambiguous `SYN+FIN` (0x03) on port 21.
+  - Trapped immediately as a critical anomaly:
+    `[CRITICAL ALERT] 192.168.56.1 -> 192.168.56.101:21 | invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21`.
+- **Scenario E (Trusted Whitelist Protection):**
+  - Host whitelisted via `--whitelist 192.168.56.1`.
+  - Attacker ran aggressive scan: `window_count=0 distinct_ports=0` recorded for all packets; zero blocks or alerts triggered.
+- **Scenario F (Self-Healing Auto-Release Quarantine):**
+  - Dedicated background daemon thread (`threading.Thread`) monitored TTL independently of incoming packets.
+  - Exactly 60.0 seconds after quarantine, the engine released the block without manual intervention:
+    `[MITIGATION] Released quarantine block on 192.168.56.1 (TTL 60s elapsed)`.
+- **Scenario G (SOC Incident Audit & Netfilter Drop Counters):**
+  - `defense_incident_log.json` verified with complete ISO timestamps, attacker IPs, trigger reasons, and TTLs.
+  - `sudo iptables -L INPUT -n -v` verified kernel packet drop counter progressing dynamically (`12 -> 13 -> 14 -> 15 -> 16 pkts`).
+
+---
+
+### 12. `defense_win_test.log` — Windows 11 Desktop Multi-Vector Defense & Advanced Firewall Suite (Scenarios A–G)
+- **Target Topology:** Windows 11 Desktop (`192.168.0.116`) probed from Windows 11 Laptop (`192.168.0.105`) over Physical LAN (Wi-Fi / Ethernet Subnet `192.168.0.0/24`).
+- **Victim Defense Engine:** `python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}"` with dynamic Windows Defender Firewall rule injection (`netsh advfirewall firewall add rule name=CustomPortScanBlock_* dir=in action=block remoteip=* protocol=TCP profile=any`).
+- **Scenario A (Fast SYN Scan Detection):**
+  - Probed ports `21, 22, 80, 135, 139, 443, 445, 8080`.
+  - Tripped on packet 8: `[ALERT] 192.168.0.105 | fast port scan (SYN=8, distinct ports=8 within 10.0s)` and injected firewall rule `CustomPortScanBlock_192_168_0_105 (Windows)`.
+- **Scenario B (Canary Honeyport Trap — Decoy Port 81 ⭐):**
+  - Zero-delay severance on packet 4 touching Port 81 (`hit canary honeyport (81)`).
+  - Automatically released after 60s TTL: `[MITIGATION] Released quarantine block on 192.168.0.105 (TTL 60s elapsed)`.
+- **Scenario C (Low-and-Slow Stealth Scan — Slow Window $W_2 = 60.0s$):**
+  - Attacker spaced 20 probes by 2.5s delay. Fast window remained $\le 4$.
+  - Slow sliding window accumulated 20 SYNs and severed the host on packet 20 (port 123) with 90s quarantine TTL.
+- **Scenario D (Invalid Flag Anomaly Probing — RFC 793 SYN+FIN):**
+  - Caught Phase 3 `SYN+FIN` rule-breaker probe on port 21 on the very first observation. Quarantined for 300s TTL.
+- **Scenario E (Trusted Whitelist Protection):**
+  - Whitelisted laptop IP (`192.168.0.105`). Full 8-port scan completed with zero alerts and all service banners grabbed cleanly.
+- **Scenario F (Self-Healing Auto-Release):**
+  - Verified dynamic removal of Windows Firewall rule via `netsh advfirewall firewall delete rule name=CustomPortScanBlock_*`. Host re-established ping reachability.
+- **Scenario G (SIEM Incident JSON Audit):**
+  - Audited `defense_incident_log.json` confirming 5 persistent incident records spanning fast scan, canary honeyport, slow stealth, and invalid flag vectors.
+
+---
+
 ## 3. Codebase Feature Coverage Verification Matrix
 
-The table below cross-references every single module, scanning mode, fingerprinting heuristic, and exploit in the codebase with the specific log file demonstrating empirical proof of its correctness.
+The table below cross-references every single module, scanning mode, fingerprinting heuristic, exploit, and defense vector in the codebase with the specific log file demonstrating empirical proof of its correctness.
 
 | Category | Specific Feature / Code Module | Verified Log Evidence | Empirical Result Observed |
 |---|---|---|---|
@@ -180,6 +239,11 @@ The table below cross-references every single module, scanning mode, fingerprint
 | **Exploitation (Module 3)** | FTP Bounce Internal Port Pivoting & Mitigation (`exploits/ftp_bounce.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`cross-platform-exploit.log`](file:///final-log/cross-platform-exploit.log) | Caught and reported host-level mitigation (`WinError 10053` WFP abortion) |
 | **Exploitation (Module 4)** | OS-Aware HTTP Path Traversal (`exploits/http_traversal.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`cross-platform-exploit.log`](file:///final-log/cross-platform-exploit.log) | Extracted Windows `win.ini` and Linux `/etc/passwd` across encoded payloads |
 | **Exploitation (Module 5)** | SSH Dictionary Brute-Force & Multi-Modal Post-Ex (`exploits/ssh_bruteforce.py`) | [`ssh_quiet.log`](file:///final-log/ssh_quiet.log), [`ssh_attack.log`](file:///final-log/ssh_attack.log) | Cracked `test:test123`, quiet reconnaissance, 1000-loop payloads, voice alert |
-| **Active Defense (10% Bonus)** | Real-Time SYN Sliding Window Detection (`defense/detector.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`win-atk-blocker.log`](file:///final-log/win-atk-blocker.log) | Detected port scan exceeding threshold (8 SYN probes, 5 distinct ports) |
-| **Active Defense (10% Bonus)** | Dynamic Windows Firewall Quarantine (`defense/blocker.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`win-atk-blocker.log`](file:///final-log/win-atk-blocker.log) | Injected inbound block rule `CustomPortScanBlock_*`, severing attack chain |
-| **Unit Test Suite** | 63 Automated Test Cases (`Imp/tests/`) | Test suite execution | **63/63 Passed (100%)** covering all parsing, scoring, attacks, and defense |
+| **Active Defense (Dual Windows)** | Fast ($W_1=10s$) & Slow ($W_2=60s$) SYN Sliding Windows (`defense/detector.py`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) (A, C), [`defense_win_test.log`](file:///final-log/defense_win_test.log) (A, C) | Caught fast scans at 8 SYNs; caught slow spaced probes (`--delay 2.5`) at 20 SYNs |
+| **Active Defense (Canary Trap)** | Decoy Canary Honeyports (`defense/detector.py` `--canary-ports 81`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) (B), [`defense_win_test.log`](file:///final-log/defense_win_test.log) (B) | Instant quarantine on probe 4 touching Port 81 without waiting for thresholds |
+| **Active Defense (Flag Filter)** | Rule-Breaker Invalid Flag Anomaly Inspection (`defense/detector.py`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) (D), [`defense_win_test.log`](file:///final-log/defense_win_test.log) (D) | Caught RFC 793 `SYN+FIN (0x03)` probe immediately; injected 300s quarantine |
+| **Active Defense (Whitelist)** | Trusted Host / Gateway Exemption (`defense/detector.py` `--whitelist`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) (E), [`defense_win_test.log`](file:///final-log/defense_win_test.log) (E) | `window_count=0 distinct_ports=0`; exempted trusted hosts from quarantine |
+| **Active Defense (Auto-Release)** | Self-Healing TTL Daemon Thread (`defense/main.py` `--block-ttl`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) (F), [`defense_win_test.log`](file:///final-log/defense_win_test.log) (F) | Background thread deleted firewall rules at exactly 60s TTL on idle network |
+| **Active Defense (Firewalls)** | Cross-Platform Linux Netfilter (`iptables`) & Windows Defender (`netsh`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log), [`defense_win_test.log`](file:///final-log/defense_win_test.log) | Dynamic injection and deletion of inbound DROP/BLOCK rules across both OSes |
+| **Active Defense (SIEM Audit)** | Machine-Readable Incident Logging (`defense/detector.py`) | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) (G), [`defense_win_test.log`](file:///final-log/defense_win_test.log) (G) | Recorded ISO timestamps, attacker IPs, reasons, rules, and TTLs in JSON |
+| **Unit Test Suite** | 68 Automated Test Cases (`Imp/tests/`) | Test suite execution (`pytest`) | **68/68 Passed (100%)** covering parsing, scoring, exploits, and defense engine |

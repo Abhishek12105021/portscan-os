@@ -6,6 +6,7 @@ construct, scan, fingerprint, or classify packets.
 """
 
 import ctypes
+import ctypes.util
 from ctypes import (
     POINTER, Structure, byref, c_char, c_char_p, c_int, c_ubyte,
     c_uint, c_void_p, c_ulong, c_ushort
@@ -53,16 +54,40 @@ class PcapPkthdr(Structure):
 
 def load_npcap():
     errors = []
-    for name in ("wpcap.dll", "Npcap/wpcap.dll"):
-        try:
-            lib = ctypes.WinDLL(name)
-            return lib
-        except OSError as exc:
-            errors.append(str(exc))
-    raise RuntimeError(
-        "Could not load wpcap.dll. Install Npcap with WinPcap-compatible "
-        "API support. Details: " + " | ".join(errors)
-    )
+    if hasattr(ctypes, "WinDLL"):
+        for name in ("wpcap.dll", "Npcap/wpcap.dll"):
+            try:
+                lib = ctypes.WinDLL(name)
+                return lib
+            except OSError as exc:
+                errors.append(str(exc))
+        raise RuntimeError(
+            "Could not load wpcap.dll. Install Npcap with WinPcap-compatible "
+            "API support. Details: " + " | ".join(errors)
+        )
+    else:
+        # Linux / POSIX (e.g. Kali Linux libpcap)
+        candidates = [
+            ctypes.util.find_library("pcap"),
+            "libpcap.so.1",
+            "libpcap.so.0.8",
+            "libpcap.so",
+            "/usr/lib/x86_64-linux-gnu/libpcap.so.1",
+            "/usr/lib/x86_64-linux-gnu/libpcap.so.0.8",
+            "/usr/lib/aarch64-linux-gnu/libpcap.so.1",
+        ]
+        for name in candidates:
+            if not name:
+                continue
+            try:
+                lib = ctypes.CDLL(name)
+                return lib
+            except OSError as exc:
+                errors.append(str(exc))
+        raise RuntimeError(
+            "Could not load libpcap on Linux. Install libpcap via 'sudo apt install libpcap-dev'. "
+            "Details: " + " | ".join(errors)
+        )
 
 
 class Pcap:

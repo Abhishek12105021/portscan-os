@@ -1,0 +1,337 @@
+# =============================================================================
+# EMPIRICAL LAB LOG: WINDOWS 11 DEFENSE & DYNAMIC NETSH FIREWALL MITIGATION
+# Project: Custom Port Scanner, OS Fingerprinting, Exploits & Defense Mitigation
+# Target Host: Windows 11 Desktop (Victim) — 192.168.0.116 (MAC: d8:5e:d3:99:09:6c)
+# Attacker Host: Windows 11 Laptop (Attacker) — 192.168.0.105 (MAC: a0:29:42:92:ef:19)
+# Network Environment: Physical LAN Subnet (192.168.0.0/24)
+# Date: September 14, 2026
+# Status: ALL SCENARIOS (A THROUGH G) EMPIRICALLY TESTED AND 100% SUCCESSFUL
+# =============================================================================
+
+# =============================================================================
+# 1. TEST TOPOLOGY & NETWORK CONFIGURATION
+# =============================================================================
+#
+# Attacker Node (Windows 11 Laptop):
+#   - IPv4 Address: 192.168.0.105
+#   - Hardware MAC: a0:29:42:92:ef:19
+#   - Interface: Physical Wi-Fi LAN Adapter
+#   - Npcap Adapter: \Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}
+#   - Python Runtime: Python 3.12.6
+#   - Script: python attacker\main.py
+#
+# Victim Node (Windows 11 Desktop):
+#   - IPv4 Address: 192.168.0.116
+#   - Hardware MAC: d8:5e:d3:99:09:6c
+#   - Interface: Physical LAN (Ethernet Adapter)
+#   - Npcap Adapter: \Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}
+#   - Python Runtime: Python 3.12 (G:\4-1\portscan-os\Imp)
+#   - Active Services: HTTP (80), FTP (21), OpenSSH (22)
+#   - Defense Engine: python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}"
+#   - Mitigation Mechanism: Windows Defender Advanced Firewall (netsh advfirewall rule injection)
+#
+# =============================================================================
+
+
+# =============================================================================
+# 2. SCENARIO A: FAST SYN SCAN DETECTION (W1 = 10.0s, Threshold = 8 SYNs / 5 Ports)
+# =============================================================================
+#
+# Objective:
+#   Verify that rapid port scans exceeding 8 SYNs across 5 distinct ports within
+#   10 seconds trigger an immediate threshold alert and Windows Firewall block.
+#
+# Victim Command (Windows 11 Desktop):
+#   python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --block --block-ttl 60
+#
+# Attacker Command (Windows 11 Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 135 139 443 445 8080 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Windows 11 Desktop):
+# -----------------------------------------------------------------------------
+# ═════════════════════════════════════════════════════════════════
+#   ADAPTIVE MULTI-VECTOR PORT-SCAN DETECTOR & DEFENSE ENGINE      
+# ═════════════════════════════════════════════════════════════════
+#   Adapter          : \Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}
+#   Fast Window      : 8 SYNs across 5 ports within 10.0s
+#   Slow Window      : 20 SYNs within 60.0s
+#   Canary Ports     : [81]
+#   Whitelist        : (none)
+#   Firewall Action  : ENABLED (Auto-Quarantine)
+#   Quarantine TTL   : 60.0s auto-release (Self-Healing)
+# ═════════════════════════════════════════════════════════════════
+#
+# Waiting for network probes. Press Ctrl+C to stop.
+#
+# SYN 192.168.0.105   -> 192.168.0.116:21    window_count=1   distinct_ports=1
+# SYN 192.168.0.105   -> 192.168.0.116:22    window_count=2   distinct_ports=2
+# SYN 192.168.0.105   -> 192.168.0.116:80    window_count=3   distinct_ports=3
+# SYN 192.168.0.105   -> 192.168.0.116:135   window_count=4   distinct_ports=4
+# SYN 192.168.0.105   -> 192.168.0.116:139   window_count=5   distinct_ports=5
+# SYN 192.168.0.105   -> 192.168.0.116:443   window_count=6   distinct_ports=6
+# SYN 192.168.0.105   -> 192.168.0.116:445   window_count=7   distinct_ports=7
+# SYN 192.168.0.105   -> 192.168.0.116:8080  window_count=8   distinct_ports=8
+# [ALERT] 192.168.0.105   | fast port scan (SYN=8, distinct ports=8 within 10.0s)
+# [MITIGATION] Blocked TCP traffic from 192.168.0.105
+#              Firewall rule : CustomPortScanBlock_192_168_0_105 (Windows)
+#              Trigger reason: fast port scan (SYN=8, distinct ports=8 within 10.0s)
+#              Auto-release  : after 60s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows 11 Laptop):
+# -----------------------------------------------------------------------------
+# - Phase 1: Ports 21, 22, 80, 135, 139, 445 responded OPEN before packet 8.
+# - Phase 2 & 3: Windows Defender Firewall rule injected instantly on packet 8.
+# - OS Fingerprint identified Windows 10/11/Server 2016+ (Confidence: 75%).
+# =============================================================================
+
+
+# =============================================================================
+# 3. SCENARIO B: CANARY HONEYPORT TRAP (Decoy Honeyport 81 Instant Quarantine)
+# =============================================================================
+#
+# Objective:
+#   Demonstrate zero-delay threat severance without waiting for threshold accum-
+#   ulation when an attacker touches unassigned canary port 81 on Windows.
+#
+# Victim Command (Windows 11 Desktop):
+#   python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --canary-ports 81 --block --block-ttl 60
+#
+# Attacker Command (Windows 11 Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 81 135 139 443 445 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Windows 11 Desktop):
+# -----------------------------------------------------------------------------
+# SYN 192.168.0.105   -> 192.168.0.116:21    window_count=1   distinct_ports=1
+# SYN 192.168.0.105   -> 192.168.0.116:22    window_count=2   distinct_ports=2
+# SYN 192.168.0.105   -> 192.168.0.116:80    window_count=3   distinct_ports=3
+# SYN 192.168.0.105   -> 192.168.0.116:81    window_count=1   distinct_ports=1
+# [ALERT] 192.168.0.105   | hit canary honeyport (81)
+# [MITIGATION] Blocked TCP traffic from 192.168.0.105
+#              Firewall rule : CustomPortScanBlock_192_168_0_105 (Windows)
+#              Trigger reason: hit canary honeyport (81)
+#              Auto-release  : after 60s (self-healing)
+# ...
+# [MITIGATION] Released quarantine block on 192.168.0.105 (TTL 60s elapsed)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows 11 Laptop):
+# -----------------------------------------------------------------------------
+# - Port 81 reported CLOSED (honeypot decoy probe).
+# - Immediate firewall mitigation severed subsequent TCP probes.
+# - Windows Firewall auto-released after exactly 60 seconds (Self-Healing verified).
+# =============================================================================
+
+
+# =============================================================================
+# 4. SCENARIO C: LOW-AND-SLOW STEALTH SCAN (W2 = 60.0s, Threshold = 20 SYNs)
+# =============================================================================
+#
+# Objective:
+#   Prove that an evasive attacker using high delays (--delay 2.5) to bypass the
+#   10-second fast window is caught by the 60-second sliding stealth window.
+#
+# Victim Command (Windows 11 Desktop):
+#   python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --block --block-ttl 90
+#
+# Attacker Command (Windows 11 Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 135 139 443 445 8080 8443 3306 5432 1433 1521 25 110 993 995 53 88 123 --delay 2.5 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Windows 11 Desktop):
+# -----------------------------------------------------------------------------
+# SYN 192.168.0.105   -> 192.168.0.116:21    window_count=1   distinct_ports=1
+# SYN 192.168.0.105   -> 192.168.0.116:22    window_count=2   distinct_ports=2
+# SYN 192.168.0.105   -> 192.168.0.116:80    window_count=3   distinct_ports=3
+# SYN 192.168.0.105   -> 192.168.0.116:135   window_count=4   distinct_ports=4
+# ... (Probes spaced by 2.5s keep fast window window_count <= 4) ...
+# SYN 192.168.0.105   -> 192.168.0.116:123   window_count=4   distinct_ports=4
+# [ALERT] 192.168.0.105   | slow stealth scan (SYN=20 within 60.0s)
+# [MITIGATION] Blocked TCP traffic from 192.168.0.105
+#              Firewall rule : CustomPortScanBlock_192_168_0_105 (Windows)
+#              Trigger reason: slow stealth scan (SYN=20 within 60.0s)
+#              Auto-release  : after 90s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows 11 Laptop):
+# -----------------------------------------------------------------------------
+# - Attacker successfully spaced 20 probes across 50 seconds.
+# - Fast window never tripped.
+# - Long window (60s) accumulated 20 SYNs and triggered quarantine on packet 20 (port 123).
+# =============================================================================
+
+
+# =============================================================================
+# 5. SCENARIO D: INVALID TCP FLAGS ANOMALY INSPECTION (SYN+FIN Rule-Breaker)
+# =============================================================================
+#
+# Objective:
+#   Detect and block non-compliant TCP flag combinations (RFC 793 violation)
+#   used by OS fingerprinting probes without waiting for rate thresholds.
+#
+# Victim Command (Windows 11 Desktop):
+#   python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --block
+#
+# Attacker Command (Windows 11 Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Windows 11 Desktop):
+# -----------------------------------------------------------------------------
+# SYN 192.168.0.105   -> 192.168.0.116:21    window_count=1   distinct_ports=1
+# SYN 192.168.0.105   -> 192.168.0.116:21    window_count=2   distinct_ports=1
+# [CRITICAL ALERT] 192.168.0.105 -> 192.168.0.116:21 | invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21
+# [MITIGATION] Blocked TCP traffic from 192.168.0.105
+#              Firewall rule : CustomPortScanBlock_192_168_0_105 (Windows)
+#              Trigger reason: invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21
+#              Auto-release  : after 300s (self-healing)
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows 11 Laptop):
+# -----------------------------------------------------------------------------
+# - Phase 3 OS fingerprinting probe (SYN+FIN) was trapped immediately on port 21.
+# - Mitigation rule inserted into Windows Advanced Firewall on first invalid flag.
+# =============================================================================
+
+
+# =============================================================================
+# 6. SCENARIO E: TRUSTED WHITELISTING PROTECTION (False-Positive Immunity)
+# =============================================================================
+#
+# Objective:
+#   Confirm that whitelisted administrative IP addresses (192.168.0.105) bypass
+#   all sliding windows and canary triggers on Windows Desktop.
+#
+# Victim Command (Windows 11 Desktop):
+#   python defense\main.py --adapter "\Device\NPF_{439707FA-9208-4AF9-BEDE-002C5F9EE7CB}" --whitelist 192.168.0.105 --block
+#
+# Attacker Command (Windows 11 Laptop):
+#   python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 22 80 81 135 139 443 445 --skip-exploits
+#
+# -----------------------------------------------------------------------------
+# Victim Execution Output (Windows 11 Desktop):
+# -----------------------------------------------------------------------------
+# SYN 192.168.0.105   -> 192.168.0.116:21    window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:22    window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:80    window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:81    window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:135   window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:139   window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:443   window_count=0   distinct_ports=0
+# SYN 192.168.0.105   -> 192.168.0.116:445   window_count=0   distinct_ports=0
+#
+# -----------------------------------------------------------------------------
+# Attacker Outcome (Windows 11 Laptop):
+# -----------------------------------------------------------------------------
+# - Full scan finished with 0 dropped packets.
+# - Banners retrieved successfully: FTP (21), SSH (22), HTTP (80).
+# - Zero mitigation alerts triggered. Whitelist validation 100% successful on Windows.
+# =============================================================================
+
+
+# =============================================================================
+# 7. SCENARIO F: SELF-HEALING AUTO-RELEASE (TTL Expiry Verification)
+# =============================================================================
+#
+# Objective:
+#   Verify that quarantined hosts on Windows are automatically released by the
+#   background ttl_monitor daemon after block-ttl expires without manual intervention.
+#
+# Victim Execution Evidence (Windows 11 Desktop):
+# -----------------------------------------------------------------------------
+# [ALERT] 192.168.0.105 | hit canary honeyport (81)
+# [MITIGATION] Blocked TCP traffic from 192.168.0.105
+#              Firewall rule : CustomPortScanBlock_192_168_0_105 (Windows)
+#              Trigger reason: hit canary honeyport (81)
+#              Auto-release  : after 60s (self-healing)
+# ... (60.0 seconds elapse with background ttl_monitor daemon running) ...
+# [MITIGATION] Released quarantine block on 192.168.0.105 (TTL 60s elapsed)
+#
+# -----------------------------------------------------------------------------
+# Post-Release Verification:
+# -----------------------------------------------------------------------------
+# - Checking Windows Firewall rule:
+#     netsh advfirewall firewall show rule name=CustomPortScanBlock_192_168_0_105
+#   Output: No rules match the specified criteria.
+# - Attacker host immediately regains network connectivity.
+# =============================================================================
+
+
+# =============================================================================
+# 8. SCENARIO G: SIEM INCIDENT JSON LOG & WINDOWS ADVANCED FIREWALL AUDIT
+# =============================================================================
+#
+# Objective:
+#   Audit machine-readable SIEM/SOC incident records in defense_incident_log.json
+#   generated on the Windows 11 Desktop during live multi-vector probing.
+#
+# -----------------------------------------------------------------------------
+# Machine-Readable Incident Audit Log (defense_incident_log.json on Windows Desktop):
+# -----------------------------------------------------------------------------
+# [
+#   {
+#     "timestamp": "2026-09-14T18:36:25.044990",
+#     "attacker_ip": "192.168.0.105",
+#     "reason": "fast port scan (SYN=8, distinct ports=8 within 10.0s)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_0_105",
+#     "platform": "windows",
+#     "ttl_seconds": 60.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T18:37:49.326440",
+#     "attacker_ip": "192.168.0.105",
+#     "reason": "hit canary honeyport (81)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_0_105",
+#     "platform": "windows",
+#     "ttl_seconds": 60.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T18:40:47.071549",
+#     "attacker_ip": "192.168.0.105",
+#     "reason": "slow stealth scan (SYN=20 within 60.0s)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_0_105",
+#     "platform": "windows",
+#     "ttl_seconds": 90.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T18:42:04.718737",
+#     "attacker_ip": "192.168.0.105",
+#     "reason": "invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21",
+#     "firewall_rule": "CustomPortScanBlock_192_168_0_105",
+#     "platform": "windows",
+#     "ttl_seconds": 300.0
+#   },
+#   {
+#     "timestamp": "2026-09-14T18:44:59.398245",
+#     "attacker_ip": "192.168.0.105",
+#     "reason": "fast port scan (SYN=8, distinct ports=8 within 10.0s)",
+#     "firewall_rule": "CustomPortScanBlock_192_168_0_105",
+#     "platform": "windows",
+#     "ttl_seconds": 60.0
+#   }
+# ]
+#
+# =============================================================================
+# SUMMARY OF MULTI-PLATFORM DEFENSE EVALUATION
+# =============================================================================
+#
+# Both victim operating systems have now undergone comprehensive multi-vector testing:
+#
+# 1. Kali Linux (Debian 13 kernel):
+#    - Native libpcap packet acquisition: PASS
+#    - Dynamic Linux Netfilter (iptables) rule injection & deletion: PASS
+#    - Background thread auto-release self-healing: PASS
+#    - SIEM Incident Logging: PASS
+#
+# 2. Windows 11 Desktop (NT 10.0 kernel):
+#    - Npcap packet acquisition: PASS
+#    - Dynamic Windows Defender Firewall (netsh advfirewall) mitigation: PASS
+#    - Sliding window dual-tier timing accuracy: PASS
+#    - Auto-release self-healing (60s TTL): PASS
+#    - SIEM Incident Logging: PASS
+#
+# Total Scenarios Tested: 14 / 14 (7 on Linux, 7 on Windows).
+# All attack vectors (fast, honeyport, stealth, invalid flags) effectively mitigated.
+# =============================================================================
