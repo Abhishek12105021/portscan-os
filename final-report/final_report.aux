@@ -1,0 +1,128 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{Executive Summary}{1}{Doc-Start}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Group Member Responsibilities}{2}{Doc-Start}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction \& Recap of the Design}{5}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}The attack and its objective}{5}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}What changed since the Design Report}{5}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Lab topology}{5}{subsection.1.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Heterogeneous verification testbed. One attacker drives probes across five distinct operating-system stacks on an isolated private LAN.}}{6}{figure.caption.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Implementation: From-Scratch Packet Layer \& Architecture}{7}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Architecture and Software Module Map}{7}{subsection.2.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Delivered Source Code Inventory and Component Responsibilities}}{7}{table.caption.2}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:module_map}{{1}{7}{Delivered Source Code Inventory and Component Responsibilities}{table.caption.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Binary Frame and Packet Construction Methodology}{7}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.2.1}Layer 2: Ethernet II Framing}{8}{subsubsection.2.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Layer 2 Ethernet II Frame Structure (Total Header: 14 Octets).}}{8}{figure.caption.3}\protected@file@percent }
+\newlabel{fig:frame_eth}{{2}{8}{Layer 2 Ethernet II Frame Structure (Total Header: 14 Octets)}{figure.caption.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.2.2}Layer 3: IPv4 Packet Construction}{8}{subsubsection.2.2.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Layer 3 IPv4 Packet Header Bit Layout (RFC 791, 20 Octets Base).}}{8}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:header_ipv4}{{3}{8}{Layer 3 IPv4 Packet Header Bit Layout (RFC 791, 20 Octets Base)}{figure.caption.4}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.2.3}Layer 4: TCP Header \& Active Diagnostic Option Offering}{8}{subsubsection.2.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Layer 4 TCP Segment Header Bit Layout (RFC 793, 20 Octets Base).}}{9}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:header_tcp}{{4}{9}{Layer 4 TCP Segment Header Bit Layout (RFC 793, 20 Octets Base)}{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}RFC 1071 Checksum Computation \& Pseudo-Header Layout}{9}{subsection.2.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces IPv4 TCP Pseudo-Header Field Layout for Checksum Computation}}{9}{table.caption.6}\protected@file@percent }
+\newlabel{tab:pseudo_header}{{2}{9}{IPv4 TCP Pseudo-Header Field Layout for Checksum Computation}{table.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Link-Layer Hardware Address Resolution Architecture}{9}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Operational Safety Rails}{9}{subsection.2.5}\protected@file@percent }
+\newlabel{sec:safety}{{2.5}{9}{Operational Safety Rails}{subsection.2.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Phase 1 \& 2: TCP SYN Port Scanning and Service Banner Grabbing}{11}{section.3}\protected@file@percent }
+\newlabel{sec:scan_banner}{{3}{11}{Phase 1 \& 2: TCP SYN Port Scanning and Service Banner Grabbing}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Phase 1: TCP SYN Half-Open Port Scanning Methodology}{11}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Protocol Timing Diagrams: RFC~793 3-Way Handshake vs.\ Half-Open Probe Classifications.}}{11}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:timing_scan}{{5}{11}{Protocol Timing Diagrams: RFC~793 3-Way Handshake vs.\ Half-Open Probe Classifications}{figure.caption.7}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.1.1}Empirical Evaluation: 100-Port Comprehensive Range Scan on Windows Target}{11}{subsubsection.3.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Phase 2: Service Banner Grabbing Methodology}{12}{subsection.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Timing Sequences for Passive Banner Capture and Active Application Probing.}}{13}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:timing_banner}{{6}{13}{Timing Sequences for Passive Banner Capture and Active Application Probing}{figure.caption.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Empirical Service Banner Telemetry Across Evaluation Targets}{13}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Phase 3: OS Fingerprinting Engine \& Multi-Platform Empirical Signatures}{15}{section.4}\protected@file@percent }
+\newlabel{sec:fp}{{4}{15}{Phase 3: OS Fingerprinting Engine \& Multi-Platform Empirical Signatures}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Probabilistic Weighted Scoring \& Calibration Architecture}{15}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.1.1}1. Mathematical Scoring Formulation}{15}{subsubsection.4.1.1}\protected@file@percent }
+\newlabel{eq:score}{{4}{15}{1. Mathematical Scoring Formulation}{equation.4.4}{}}
+\newlabel{eq:prob}{{5}{15}{1. Mathematical Scoring Formulation}{equation.4.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.1.2}2. Low-Evidence Damping \& Academic Calibration}{15}{subsubsection.4.1.2}\protected@file@percent }
+\newlabel{eq:damping}{{6}{15}{2. Low-Evidence Damping \& Academic Calibration}{equation.4.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Multi-Stage Probabilistic OS Fingerprinting and Confidence Calibration Pipeline.}}{15}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:fp_pipeline}{{7}{15}{Multi-Stage Probabilistic OS Fingerprinting and Confidence Calibration Pipeline}{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}The Seven Core Fingerprinting Strategies: Theory, Numbering \& Rules}{16}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.1}Strategy 1: Initial TTL Normalization \& Router Hop Recovery}{16}{subsubsection.4.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.2}Strategy 2: Multi-Sample IP-ID Sequence Classification (Idea 2)}{16}{subsubsection.4.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.3}Strategy 3: TCP Timestamp Clock Frequency ($R$) \& Uptime Recovery (Idea 3)}{16}{subsubsection.4.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.4}Strategy 4: Active RFC 3168 Explicit Congestion Notification (ECN) Probing (Idea 4)}{17}{subsubsection.4.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.5}Strategy 5: Ambiguous TCP Flag Handling (The RFC 793 ``Rule-Breaker'' Probe) (Idea 5)}{17}{subsubsection.4.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.6}Strategy 6: Autonomous ICMP / UDP Diagnostic Battery (Idea 6)}{17}{subsubsection.4.2.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.7}Strategy 7: Cross-Layer Application Banner Correlation \& Header Order (Idea 7.1)}{18}{subsubsection.4.2.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.8}S-Tier Passive Core: TCP Option Order \& Advertised Window Signatures}{18}{subsubsection.4.2.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Version Tier Refinement Architecture \& Predicates}{18}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Strategy Hierarchy: The Fingerprinting Tier List}{18}{subsection.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Version Tier Classification Predicates and Characteristic Signatures}}{19}{table.caption.10}\protected@file@percent }
+\newlabel{tab:version_tiers}{{3}{19}{Version Tier Classification Predicates and Characteristic Signatures}{table.caption.10}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Comprehensive OS Fingerprinting Strategy Hierarchy and Effectiveness Tier List}}{20}{table.caption.11}\protected@file@percent }
+\newlabel{tab:tier_list}{{4}{20}{Comprehensive OS Fingerprinting Strategy Hierarchy and Effectiveness Tier List}{table.caption.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Empirical Diagnostic Telemetry Across Heterogeneous Platforms}{21}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.1}Target 1: Physical Desktop Windows 11 Workstation (\texttt  {192.168.0.116})}{21}{subsubsection.4.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.2}Target 2: Debian GNU/Linux 6.x Virtual Machine (\texttt  {192.168.56.101})}{21}{subsubsection.4.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.3}Target 3: Apple iPad Tablet running iPadOS 17 / Darwin BSD (\texttt  {192.168.0.152})}{22}{subsubsection.4.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.5.4}Target 4: Android 14 Mobile Smartphone (\texttt  {192.168.0.169})}{22}{subsubsection.4.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Phase 4 \& 5: Dynamic OS-Aware Weaponization and Exploit Methodologies}{23}{section.5}\protected@file@percent }
+\newlabel{sec:exploits}{{5}{23}{Phase 4 \& 5: Dynamic OS-Aware Weaponization and Exploit Methodologies}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Phase 4: Dynamic OS-Aware Payload Selection Methodology}{23}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Phase 5: Targeted Exploit Methodologies \& In-Depth Execution Logs}{23}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.1}1. FTP Exploit Suite (Three Concrete Attack Vectors)}{23}{subsubsection.5.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Protocol Interactions for FTP Web-Shell RCE and Host Firewall Bounce Mitigation.}}{24}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:timing_ftp}{{8}{24}{Protocol Interactions for FTP Web-Shell RCE and Host Firewall Bounce Mitigation}{figure.caption.12}{}}
+\@writefile{toc}{\contentsline {paragraph}{Empirical Evidence: FTP Exploit Suite Execution Telemetry.}{24}{paragraph*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.2}2. HTTP Directory Traversal Methodology}{25}{subsubsection.5.2.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Protocol Sequence of Unauthenticated HTTP Directory Path Traversal Exploit.}}{25}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:timing_http}{{9}{25}{Protocol Sequence of Unauthenticated HTTP Directory Path Traversal Exploit}{figure.caption.14}{}}
+\@writefile{toc}{\contentsline {paragraph}{Empirical Evidence: HTTP Directory Traversal Execution Records.}{25}{paragraph*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.3}3. SSH Weak-Credential Brute-Force \& Multi-Modal Visual Showcase}{26}{subsubsection.5.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Visual Evidence of SSH Compromise: Desktop State Transition on Target Workstation (\texttt  {192.168.1.104}).}}{27}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:ssh_desktop_transition}{{10}{27}{Visual Evidence of SSH Compromise: Desktop State Transition on Target Workstation (\texttt {192.168.1.104})}{figure.caption.16}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Delivered Post-Exploitation Artefacts and Interactive Execution on Victim Node.}}{27}{figure.caption.17}\protected@file@percent }
+\newlabel{fig:ssh_artefacts}{{11}{27}{Delivered Post-Exploitation Artefacts and Interactive Execution on Victim Node}{figure.caption.17}{}}
+\@writefile{toc}{\contentsline {paragraph}{Empirical Evidence: SSH Credential Audit \& Post-Exploitation Telemetry.}{27}{paragraph*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Countermeasure: Multi-Vector Active Defense Engine}{29}{section.6}\protected@file@percent }
+\newlabel{sec:defense}{{6}{29}{Countermeasure: Multi-Vector Active Defense Engine}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Detection Methodology \& The Four Inspection Vectors}{29}{subsection.6.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Delivered Active Defense Detection Vectors and Trigger Mechanisms}}{29}{table.caption.19}\protected@file@percent }
+\newlabel{tab:defense_vectors}{{5}{29}{Delivered Active Defense Detection Vectors and Trigger Mechanisms}{table.caption.19}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Cross-Platform Dynamic Firewall Mitigation Architecture}{29}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Sliding-Window Detection and Mitigation Timeline}{29}{subsection.6.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Timeline of Sliding-Window Scan Detection and Dynamic Firewall Rule Injection.}}{30}{figure.caption.20}\protected@file@percent }
+\newlabel{fig:timing_defense}{{12}{30}{Timeline of Sliding-Window Scan Detection and Dynamic Firewall Rule Injection}{figure.caption.20}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Empirical Diagnostic Logs: Active Defense in Action}{30}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.1}Evaluation 1: Windows Defender Firewall Dynamic Quarantine \& Decoy Honeyport}{30}{subsubsection.6.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.2}Evaluation 2: Linux Netfilter Dynamic Rule Injection \& Drop Counter Progression}{30}{subsubsection.6.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.4.3}Evaluation 3: Live Mid-Attack Chain Severance}{31}{subsubsection.6.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Results, Success Analysis \& Empirical Verification Matrix}{32}{section.7}\protected@file@percent }
+\newlabel{sec:results}{{7}{32}{Results, Success Analysis \& Empirical Verification Matrix}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Per-Phase Outcome Verdict}{32}{subsection.7.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Systematic Operational Verdict and Evidence Across Attack Phases}}{32}{table.caption.21}\protected@file@percent }
+\newlabel{tab:results_verdict}{{6}{32}{Systematic Operational Verdict and Evidence Across Attack Phases}{table.caption.21}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Why the Attacks Succeeded}{32}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Analytical Assessment of Mitigations, Attack Observations \& Failure Cases}{33}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.3.1}1. Deep-Dive on Exploit 3: RFC~959 FTP Bounce Attack (The Sole Exploit Failure)}{33}{subsubsection.7.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.3.2}2. Comparative Observations Across All Attack Vectors}{34}{subsubsection.7.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Systematic Attack Observations: Process, Assumptions, Expected vs.\ Actual Outcomes, and Defense Verdict}}{34}{table.caption.22}\protected@file@percent }
+\newlabel{tab:attack_observations}{{7}{34}{Systematic Attack Observations: Process, Assumptions, Expected vs.\ Actual Outcomes, and Defense Verdict}{table.caption.22}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.3.3}3. Probabilistic Confidence Calibration vs.\ False Certainty}{34}{subsubsection.7.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Victim Server Daemon Observations}{35}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.5}Master Empirical Verification Matrix}{35}{subsection.7.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Consolidated Master Matrix of Empirical Verification Test Runs}}{35}{table.caption.23}\protected@file@percent }
+\newlabel{tab:master_matrix}{{8}{35}{Consolidated Master Matrix of Empirical Verification Test Runs}{table.caption.23}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.6}Cross-Platform Network Stack Signature Comparison}{36}{subsection.7.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Cross-Platform Stack Behavioral Signatures Observed in Empirical Testbed}}{36}{table.caption.24}\protected@file@percent }
+\newlabel{tab:os_comparison}{{9}{36}{Cross-Platform Stack Behavioral Signatures Observed in Empirical Testbed}{table.caption.24}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusion}{37}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{38}{section.8}\protected@file@percent }
+\newlabel{LastPage}{{8}{38}{}{page.38}{}}
+\gdef\lastpage@lastpage{38}
+\gdef\lastpage@lastpageHy{38}
+\gdef \@abspage@last{39}

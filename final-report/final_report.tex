@@ -17,6 +17,7 @@
 \usepackage{microtype}
 \usepackage{parskip}
 \setlength{\parskip}{5pt}
+\raggedbottom
 
 %-------------------------------------------------------- Tables / lists / fig
 \usepackage{booktabs}
@@ -28,6 +29,7 @@
 \usepackage{float}
 \usepackage{graphicx}
 \usepackage{caption}
+\usepackage[section]{placeins}
 
 %------------------------------------------------------------------- Palette
 % Red-based scheme. Accent = deep crimson used for headings, rules, table
@@ -60,6 +62,7 @@
 \usepackage{fancyhdr}
 \usepackage{lastpage}
 \pagestyle{fancy}\fancyhf{}
+\setlength{\headheight}{22pt}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\headrule}{\hbox to\headwidth{\color{rule}\leaders\hrule height 0.4pt\hfill}}
 \fancyhead[L]{\footnotesize\sffamily\color{accent}CSE 406 — Project \#8}
@@ -82,22 +85,6 @@
     breaklines=true, columns=fullflexible, keepspaces=true,
     aboveskip=0pt, belowskip=0pt}}
 
-% Raw-log listing style: tiny wrapping monospace for the full-log appendix.
-% \rawlog{<file>}{<caption>} inputs a complete sanitised log verbatim.
-\lstdefinestyle{rawlog}{
-  basicstyle=\ttfamily\fontsize{6.4}{7.4}\selectfont\color{ink},
-  breaklines=true, breakatwhitespace=false,
-  columns=fullflexible, keepspaces=true,
-  showstringspaces=false, tabsize=2,
-  frame=single, rulecolor=\color{rule}, framesep=4pt,
-  backgroundcolor=\color{codebg},
-  breakindent=0pt, postbreak=\mbox{\textcolor{rule}{$\hookrightarrow$}\space},
-  xleftmargin=2pt, xrightmargin=2pt, aboveskip=6pt, belowskip=2pt}
-\newcommand{\rawlog}[2]{%
-  \needspace{4\baselineskip}%
-  {\vspace{2pt}\noindent\sffamily\small\bfseries\color{accent}#2}\par\vspace{2pt}%
-  \lstinputlisting[style=rawlog]{logs/#1}\par\vspace{4pt}}
-
 % A restrained key-point callout — used sparingly (only for real highlights).
 \newtcolorbox{keypoint}[1][Key point]{
   enhanced, sharp corners,
@@ -106,15 +93,22 @@
   fonttitle=\sffamily\bfseries\footnotesize\color{accent},
   title={#1}, coltitle=accent}
 
-% Captioned figure PLACEHOLDER (team drops the real screenshot in later).
-% Renders a clean framed box so the PDF compiles before images exist.
-\newcommand{\shotplaceholder}[1]{%
+% Captioned figure / screenshot handler with automatic file existence check:
+% If the image file exists on disk, renders it at \linewidth; otherwise renders
+% a structured placeholder frame so compilation never fails before screenshots are taken.
+\newcommand{\shotscreenshot}[3][0.92\linewidth]{%
   \begin{center}
-  \setlength{\fboxrule}{0.6pt}\setlength{\fboxsep}{0pt}%
-  \textcolor{rule}{\fbox{\parbox[c][2.4cm][c]{0.86\linewidth}{\centering
-  \sffamily\footnotesize\color{accent}[\,SCREENSHOT\,]\\[2pt]
-  \color{ink}\normalfont\footnotesize #1}}}%
+  \IfFileExists{#2}{%
+    \includegraphics[width=#1]{#2}%
+  }{%
+    \setlength{\fboxrule}{0.6pt}\setlength{\fboxsep}{0pt}%
+    \textcolor{rule}{\fbox{\parbox[c][2.6cm][c]{#1}{\centering
+    \sffamily\footnotesize\color{accent}[\,DEMONSTRATION SCREENSHOT FRAME\,]\\[3pt]
+    \color{ink}\normalfont\footnotesize #3\\[2pt]
+    \tiny\ttfamily\color{ink!60}(File target: \detokenize{#2})}}}%
+  }%
   \end{center}}
+\newcommand{\shotplaceholder}[1]{\shotscreenshot{missing.png}{#1}}
 
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
@@ -124,13 +118,12 @@
 % Strong inline highlight — a genuine emphasis, used sparingly.
 \newcommand{\hl}[1]{\textbf{\color{accentstrong}#1}}
 
-% Keep every section heading from landing on the last line of a page:
-% reserve ~4 lines before each \section so the heading + opening text stay together.
+% Enforce that every section starts on a brand new page and flushes pending floats:
 \let\origsection\section
-\renewcommand{\section}{\Needspace*{4\baselineskip}\origsection}
+\renewcommand{\section}{\clearpage\origsection}
 
-%------------------------------------------------------------- New column type
 \newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 
 % Table header helper: pale accent fill + bold sans
 \newcommand{\thh}[1]{\textbf{\sffamily #1}}
@@ -260,16 +253,21 @@ end-to-end attack orchestration.\\
 %  BODY  — sections filled in subsequent edits
 %==============================================================================
 
+\clearpage
 \input{sections/01_intro}
+\clearpage
 \input{sections/02_implementation}
-\input{sections/03_attack_steps}
+\clearpage
+\input{sections/03_scan_banner}
+\clearpage
 \input{sections/04_fingerprint}
-\input{sections/05_results}
-\input{sections/06_observed}
-\input{sections/06b_empirical}
-\input{sections/07_defense}
-\input{sections/08_verification}
+\clearpage
+\input{sections/05_exploits}
+\clearpage
+\input{sections/06_defense}
+\clearpage
+\input{sections/07_results}
+\clearpage
 \input{sections/09_conclusion}
-\input{sections/10_logs_appendix}
 
 \end{document}

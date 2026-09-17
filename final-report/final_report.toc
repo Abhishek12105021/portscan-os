@@ -1,0 +1,69 @@
+\contentsline {section}{Executive Summary}{1}{Doc-Start}%
+\contentsline {section}{Group Member Responsibilities}{2}{Doc-Start}%
+\contentsline {section}{\numberline {1}Introduction \& Recap of the Design}{5}{section.1}%
+\contentsline {subsection}{\numberline {1.1}The attack and its objective}{5}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}What changed since the Design Report}{5}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Lab topology}{5}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Implementation: From-Scratch Packet Layer \& Architecture}{7}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Architecture and Software Module Map}{7}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Binary Frame and Packet Construction Methodology}{7}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}Layer 2: Ethernet II Framing}{8}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}Layer 3: IPv4 Packet Construction}{8}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}Layer 4: TCP Header \& Active Diagnostic Option Offering}{8}{subsubsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.3}RFC 1071 Checksum Computation \& Pseudo-Header Layout}{9}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Link-Layer Hardware Address Resolution Architecture}{9}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}Operational Safety Rails}{9}{subsection.2.5}%
+\contentsline {section}{\numberline {3}Phase 1 \& 2: TCP SYN Port Scanning and Service Banner Grabbing}{11}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Phase 1: TCP SYN Half-Open Port Scanning Methodology}{11}{subsection.3.1}%
+\contentsline {subsubsection}{\numberline {3.1.1}Empirical Evaluation: 100-Port Comprehensive Range Scan on Windows Target}{11}{subsubsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.2}Phase 2: Service Banner Grabbing Methodology}{12}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Empirical Service Banner Telemetry Across Evaluation Targets}{13}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Phase 3: OS Fingerprinting Engine \& Multi-Platform Empirical Signatures}{15}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Probabilistic Weighted Scoring \& Calibration Architecture}{15}{subsection.4.1}%
+\contentsline {subsubsection}{\numberline {4.1.1}1. Mathematical Scoring Formulation}{15}{subsubsection.4.1.1}%
+\contentsline {subsubsection}{\numberline {4.1.2}2. Low-Evidence Damping \& Academic Calibration}{15}{subsubsection.4.1.2}%
+\contentsline {subsection}{\numberline {4.2}The Seven Core Fingerprinting Strategies: Theory, Numbering \& Rules}{16}{subsection.4.2}%
+\contentsline {subsubsection}{\numberline {4.2.1}Strategy 1: Initial TTL Normalization \& Router Hop Recovery}{16}{subsubsection.4.2.1}%
+\contentsline {subsubsection}{\numberline {4.2.2}Strategy 2: Multi-Sample IP-ID Sequence Classification (Idea 2)}{16}{subsubsection.4.2.2}%
+\contentsline {subsubsection}{\numberline {4.2.3}Strategy 3: TCP Timestamp Clock Frequency ($R$) \& Uptime Recovery (Idea 3)}{16}{subsubsection.4.2.3}%
+\contentsline {subsubsection}{\numberline {4.2.4}Strategy 4: Active RFC 3168 Explicit Congestion Notification (ECN) Probing (Idea 4)}{17}{subsubsection.4.2.4}%
+\contentsline {subsubsection}{\numberline {4.2.5}Strategy 5: Ambiguous TCP Flag Handling (The RFC 793 ``Rule-Breaker'' Probe) (Idea 5)}{17}{subsubsection.4.2.5}%
+\contentsline {subsubsection}{\numberline {4.2.6}Strategy 6: Autonomous ICMP / UDP Diagnostic Battery (Idea 6)}{17}{subsubsection.4.2.6}%
+\contentsline {subsubsection}{\numberline {4.2.7}Strategy 7: Cross-Layer Application Banner Correlation \& Header Order (Idea 7.1)}{18}{subsubsection.4.2.7}%
+\contentsline {subsubsection}{\numberline {4.2.8}S-Tier Passive Core: TCP Option Order \& Advertised Window Signatures}{18}{subsubsection.4.2.8}%
+\contentsline {subsection}{\numberline {4.3}Version Tier Refinement Architecture \& Predicates}{18}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Strategy Hierarchy: The Fingerprinting Tier List}{18}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Empirical Diagnostic Telemetry Across Heterogeneous Platforms}{21}{subsection.4.5}%
+\contentsline {subsubsection}{\numberline {4.5.1}Target 1: Physical Desktop Windows 11 Workstation (\texttt {192.168.0.116})}{21}{subsubsection.4.5.1}%
+\contentsline {subsubsection}{\numberline {4.5.2}Target 2: Debian GNU/Linux 6.x Virtual Machine (\texttt {192.168.56.101})}{21}{subsubsection.4.5.2}%
+\contentsline {subsubsection}{\numberline {4.5.3}Target 3: Apple iPad Tablet running iPadOS 17 / Darwin BSD (\texttt {192.168.0.152})}{22}{subsubsection.4.5.3}%
+\contentsline {subsubsection}{\numberline {4.5.4}Target 4: Android 14 Mobile Smartphone (\texttt {192.168.0.169})}{22}{subsubsection.4.5.4}%
+\contentsline {section}{\numberline {5}Phase 4 \& 5: Dynamic OS-Aware Weaponization and Exploit Methodologies}{23}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Phase 4: Dynamic OS-Aware Payload Selection Methodology}{23}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Phase 5: Targeted Exploit Methodologies \& In-Depth Execution Logs}{23}{subsection.5.2}%
+\contentsline {subsubsection}{\numberline {5.2.1}1. FTP Exploit Suite (Three Concrete Attack Vectors)}{23}{subsubsection.5.2.1}%
+\contentsline {paragraph}{Empirical Evidence: FTP Exploit Suite Execution Telemetry.}{24}{paragraph*.13}%
+\contentsline {subsubsection}{\numberline {5.2.2}2. HTTP Directory Traversal Methodology}{25}{subsubsection.5.2.2}%
+\contentsline {paragraph}{Empirical Evidence: HTTP Directory Traversal Execution Records.}{25}{paragraph*.15}%
+\contentsline {subsubsection}{\numberline {5.2.3}3. SSH Weak-Credential Brute-Force \& Multi-Modal Visual Showcase}{26}{subsubsection.5.2.3}%
+\contentsline {paragraph}{Empirical Evidence: SSH Credential Audit \& Post-Exploitation Telemetry.}{27}{paragraph*.18}%
+\contentsline {section}{\numberline {6}Countermeasure: Multi-Vector Active Defense Engine}{29}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Detection Methodology \& The Four Inspection Vectors}{29}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Cross-Platform Dynamic Firewall Mitigation Architecture}{29}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Sliding-Window Detection and Mitigation Timeline}{29}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Empirical Diagnostic Logs: Active Defense in Action}{30}{subsection.6.4}%
+\contentsline {subsubsection}{\numberline {6.4.1}Evaluation 1: Windows Defender Firewall Dynamic Quarantine \& Decoy Honeyport}{30}{subsubsection.6.4.1}%
+\contentsline {subsubsection}{\numberline {6.4.2}Evaluation 2: Linux Netfilter Dynamic Rule Injection \& Drop Counter Progression}{30}{subsubsection.6.4.2}%
+\contentsline {subsubsection}{\numberline {6.4.3}Evaluation 3: Live Mid-Attack Chain Severance}{31}{subsubsection.6.4.3}%
+\contentsline {section}{\numberline {7}Results, Success Analysis \& Empirical Verification Matrix}{32}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Per-Phase Outcome Verdict}{32}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Why the Attacks Succeeded}{32}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Analytical Assessment of Mitigations, Attack Observations \& Failure Cases}{33}{subsection.7.3}%
+\contentsline {subsubsection}{\numberline {7.3.1}1. Deep-Dive on Exploit 3: RFC~959 FTP Bounce Attack (The Sole Exploit Failure)}{33}{subsubsection.7.3.1}%
+\contentsline {subsubsection}{\numberline {7.3.2}2. Comparative Observations Across All Attack Vectors}{34}{subsubsection.7.3.2}%
+\contentsline {subsubsection}{\numberline {7.3.3}3. Probabilistic Confidence Calibration vs.\ False Certainty}{34}{subsubsection.7.3.3}%
+\contentsline {subsection}{\numberline {7.4}Victim Server Daemon Observations}{35}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}Master Empirical Verification Matrix}{35}{subsection.7.5}%
+\contentsline {subsection}{\numberline {7.6}Cross-Platform Network Stack Signature Comparison}{36}{subsection.7.6}%
+\contentsline {section}{\numberline {8}Conclusion}{37}{section.8}%
+\contentsline {section}{References}{38}{section.8}%
