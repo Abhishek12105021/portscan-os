@@ -1,0 +1,76 @@
+# =============================================================================
+# EMPIRICAL LAB LOG: AUTONOMOUS ICMP ECHO FALLBACK FINGERPRINTING
+# Project: Custom Port Scanner, OS Fingerprinting, Exploits & Defense Mitigation
+# Target Host: Windows 11 Desktop (Victim) — 192.168.0.116 (MAC: d8:5e:d3:99:09:6c)
+# Attacker Host: Windows 11 Laptop (Attacker) — 192.168.0.105 (MAC: a0:29:42:92:ef:19)
+# Network Environment: Physical LAN Subnet (192.168.0.0/24)
+# Scenario: Desktop Windows Defender Firewall Active (All TCP Ports Filtered/Dropped)
+# Status: 100% SUCCESSFUL AUTONOMOUS ICMP FALLBACK (Windows 94% Confidence)
+# =============================================================================
+
+# Attacker Command (Windows 11 Laptop):
+python attacker\main.py --adapter "\Device\NPF_{A1D23BF4-3809-4F50-9ED3-9E25625DA229}" --target 192.168.0.116 --ports 21 80 81 --skip-exploits
+
+# Terminal Output:
+═════════════════════════════════════════════════════════════════
+  CUSTOM PORT SCANNER — ATTACK TOOLKIT
+═════════════════════════════════════════════════════════════════
+  Target       : 192.168.0.116
+  Attacker     : 192.168.0.105 (a0:29:42:92:ef:19)
+  Target MAC   : d8:5e:d3:99:09:6c
+  Ports        : [21, 80, 81]
+  Scan delay   : 0.5s
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 1] TCP SYN Port Scanning
+═════════════════════════════════════════════════════════════════
+  Target      : 192.168.0.116
+  Attacker IP : 192.168.0.105
+  Attacker MAC: a0:29:42:92:ef:19
+  Target MAC  : d8:5e:d3:99:09:6c
+  Ports       : 3
+  Delay       : 0.50s
+─────────────────────────────────────────────────────────────────
+     21  NO RESPONSE / POSSIBLY FILTERED
+     80  NO RESPONSE / POSSIBLY FILTERED
+     81  NO RESPONSE / POSSIBLY FILTERED
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 3] OS Fingerprinting
+═════════════════════════════════════════════════════════════════
+  Candidate  : ICMP Echo Reply
+  Likely OS  : Windows
+  Confidence : 94%
+  Version    : Windows 7 / 8 / Vista / Server 2008-2012  or  Windows 10 / 11 / Server 2016+
+                47%  Windows 7 / 8 / Vista / Server 2008-2012
+                47%  Windows 10 / 11 / Server 2016+
+                 6%  Windows 9x / 2000 (legacy)
+  TTL        : 128 (initial 128, ~0 hop(s))
+  Window     : 0
+  DF bit     : clear
+  IP ID      : 52494
+  Options    : none
+  Probability:
+    Windows           94%  ##################
+    Network device     6%  #
+    Linux              0%
+    macOS / BSD        0%
+  Evidence   :
+    - initial TTL 128 (~128 observed, 0 hop(s)) is characteristic of Windows
+    - TCP window 0 (no strong family match)
+    - Don't-Fragment (DF) bit clear
+    - TCP timestamp absent (leans Windows)
+    - ICMP Echo Reply normalized Code=0 (Code 9 probe) with TTL=128 -- characteristic of Windows stack
+
+  [PHASE 5] Exploit execution skipped (--skip-exploits)
+
+═════════════════════════════════════════════════════════════════
+  ATTACK SUMMARY
+═════════════════════════════════════════════════════════════════
+  Ports scanned : 3
+  Open          : 0
+  Closed        : 0
+  Filtered/NR   : 3
+  Banners found : 0/0
+  OS guess      : Windows (94%)
+═════════════════════════════════════════════════════════════════

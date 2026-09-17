@@ -20,6 +20,7 @@ This directory consolidates the **definitive, empirical verification logs** capt
 | **10** | [`ssh_attack.log`](file:///final-log/ssh_attack.log) | **Windows Target** (SSH Loud Mode) | Windows 11 (`192.168.1.104` — `AisheePC`) | `22` (SSH) | 1 Open (`22`) | **OFF / Passive** | **ON & SUCCESSFUL**<br>✓ SSH Brute Force (`test:test123`)<br>• Spooky Trophy File (`PROOF_OF_ACCESS.txt`)<br>• 1000-Loop Payloads (`.exe`, `.bat`, `.py`)<br>• Physical Voice Alert on Speakers | **Windows (75%)**<br>(SYN/ACK: TTL 128, OpenSSH banner, 1000 Hz clock, Strict incremental IP ID) |
 | **11** | [`defense_kali_test.log`](file:///final-log/defense_kali_test.log) | **Kali Linux VM** (Multi-Vector Defense & Netfilter Mitigation) | Debian GNU/Linux Kernel 6.x (`192.168.56.101`) | Probed across `21, 22, 80, 81, 135, 139, 443, 445, 8080` + 20 ports | Multi-Scenario Suite:<br>• Fast scan: 3 Open, 5 Closed $\to$ Dropped<br>• Canary: Trapped on Port 81<br>• Stealth: Trapped on Port 123 | **ON / Linux Netfilter**<br>(Dynamic `iptables -I INPUT ... -j DROP` with Auto-Release TTL) | **SEVERED / MITIGATED**<br>• Banner grabs timed out (0/3)<br>• OS probes dropped<br>• Exploit execution prevented | **Linux (55%–68%)**<br>(Attacker severing confirmed before reconnaissance completion) |
 | **12** | [`defense_win_test.log`](file:///final-log/defense_win_test.log) | **Windows 11 Desktop** (Multi-Vector Defense & Advanced Firewall) | Windows 11 Pro (`192.168.0.116`) | Probed across `21, 22, 80, 81, 135, 139, 443, 445, 8080` + 20 ports | Multi-Scenario Suite:<br>• Fast scan: 6 Open, 2 Closed $\to$ Quarantined<br>• Canary: Trapped on Port 81<br>• Stealth: Trapped on Port 123 | **ON / Windows Firewall**<br>(Dynamic `netsh advfirewall` inbound block with Auto-Release TTL) | **SEVERED / MITIGATED**<br>• Banners timed out post-block<br>• Handshakes aborted<br>• Exploit execution prevented | **Windows (71%–75%)**<br>(TTL 128, Win 65535, Strict incremental IP IDs `[34387...]`, 1001 Hz clock) |
+| **13** | [`win-icmp.log`](file:///final-log/win-icmp.log) | **Windows 11 Desktop** (Autonomous ICMP Echo Fallback Verification) | Windows 11 Pro (`192.168.0.116`) | `21, 80, 81` | 3 Filtered / No Response (Firewall Active) | **ON / Windows Firewall** (Inbound drop) | **OFF / Skipped**<br>(`--skip-exploits`) | **Windows (94%)**<br>(ICMP Echo Reply: TTL 128, Code 9 normalized to Code 0, DF clear, IP ID 52494) |
 
 ---
 
@@ -215,6 +216,14 @@ This directory consolidates the **definitive, empirical verification logs** capt
 - **Scenario G (SIEM Incident JSON Audit):**
   - Audited `defense_incident_log.json` confirming 5 persistent incident records spanning fast scan, canary honeyport, slow stealth, and invalid flag vectors.
 
+### 13. `win-icmp.log` — Windows 11 Desktop Autonomous ICMP Echo Fallback Verification
+- **Target Topology:** Windows 11 Desktop (`192.168.0.116`) probed from Windows 11 Laptop (`192.168.0.105`) with Windows Defender Firewall actively dropping/filtering all incoming TCP SYN probes.
+- **Operational Findings:**
+  - Probed TCP ports `21, 80, 81` all returned `NO RESPONSE / POSSIBLY FILTERED`.
+  - With zero open or closed ports available for TCP SYN/ACK or RST analysis, the fingerprinting engine autonomously pivoted to the **ICMP Echo Reply Candidate**.
+  - Windows 11 responded to the ICMP probe, normalizing non-standard Code 9 to Code 0 with initial TTL 128 and Don't-Fragment (DF) bit clear.
+  - Successfully classified the target as **Windows at 94% confidence** (47% Win 7/8, 47% Win 10/11) without requiring a single open TCP port.
+
 ---
 
 ## 3. Codebase Feature Coverage Verification Matrix
@@ -231,7 +240,7 @@ The table below cross-references every single module, scanning mode, fingerprint
 | **Fingerprinting (Idea 3)** | TCP Timestamp Clock Frequency & Uptime (`fingerprint/engine.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`ipad.log`](file:///final-log/ipad.log), [`ssh_quiet.log`](file:///final-log/ssh_quiet.log) | ~1000 Hz / 1ms tick rate detected on Windows; randomized offsets on iPadOS |
 | **Fingerprinting (Idea 4)** | RFC 3168 ECN Negotiation Probing (`fingerprint/engine.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`cross-platform-exploit.log`](file:///final-log/cross-platform-exploit.log) | ECN flags ignored (`ECE=0, CWR=0`) on Windows; reflected on Linux/Darwin |
 | **Fingerprinting (Idea 5)** | Ambiguous TCP Flags (SYN+FIN Rule-Breaker) (`fingerprint/engine.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`ssh_quiet.log`](file:///final-log/ssh_quiet.log) | Silently dropped by Unix; RST emitted by Windows |
-| **Fingerprinting (Idea 6)** | ICMP Echo Reply Quoting & Fallback (`fingerprint/engine.py`) | [`kali.log`](file:///final-log/kali.log) (Test 2), [`full-chain.log`](file:///final-log/full-chain.log) | Code 9 reflection on Linux (67%); Code 0 normalization on Windows |
+| **Fingerprinting (Idea 6)** | ICMP Echo Reply Quoting & Fallback (`fingerprint/engine.py`) | [`kali.log`](file:///final-log/kali.log) (Test 2), [`win-icmp.log`](file:///final-log/win-icmp.log), [`full-chain.log`](file:///final-log/full-chain.log) | Code 9 reflection on Linux (67%); Code 0 normalization on Windows (94%) |
 | **Fingerprinting (Idea 7.1)** | Cross-Layer Banner Correlation (`fingerprint/cross_layer.py`) | [`kali.log`](file:///final-log/kali.log), [`ssh_quiet.log`](file:///final-log/ssh_quiet.log) | Debian OpenSSH matched Linux distro; Microsoft OpenSSH matched Windows |
 | **Exploitation (Idea 7.2)** | Phase 4 Dynamic OS-Aware Payload Selection (`attacker/payload_selector.py`) | [`cross-platform-exploit.log`](file:///final-log/cross-platform-exploit.log), [`full-chain.log`](file:///final-log/full-chain.log) | Windows selected `win.ini` + `whoami`; Linux selected `/etc/passwd` + `id` |
 | **Exploitation (Module 1)** | FTP Anonymous Login & Directory Traversal (`exploits/ftp_anon.py`) | [`full-chain.log`](file:///final-log/full-chain.log), [`cross-platform-exploit.log`](file:///final-log/cross-platform-exploit.log) | Successfully read `/pub` and `/uploads` without credentials |

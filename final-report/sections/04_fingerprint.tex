@@ -1,11 +1,9 @@
-%========================================================= §4 FINGERPRINTING
+%========================================================= SECTION 4: FINGERPRINTING
 \section{Phase 3: OS Fingerprinting Engine \& Multi-Platform Empirical Signatures}\label{sec:fp}
 
-The operating-system fingerprinting engine represents the technical centerpiece of this project.
-Rather than relying on brittle, static lookup tables or single-packet assumptions, the engine implements
-a \textbf{multi-vector probabilistic classification model} that dynamically fuses passive packet
-observations, active differential RFC probes, sequence tracking, and cross-layer application semantics into a
-rigorously calibrated confidence score.
+The operating-system fingerprinting engine classifies target hosts across multiple protocol layers.
+Instead of matching single-packet signatures against static tables, the engine scores candidate OS families
+using passive packet observations, active RFC probes, sequence tracking, and service banner hints.
 
 \subsection{Probabilistic Weighted Scoring \& Calibration Architecture}
 Every incoming packet attribute is evaluated by an independent strategy module~$k$. Each strategy
@@ -14,7 +12,7 @@ assigns evidence weights $w_{k,c}$ to four target operating system candidate fam
 $c \;\in\; \mathcal{C} \;=\; \{\text{Windows}, \ \text{Linux}, \ \text{macOS / BSD}, \ \text{Network Device}\}$
 \end{center}
 
-\subsubsection{1. Mathematical Scoring Formulation}
+\subsubsection{Mathematical Scoring Formulation}
 The cumulative raw score $S(c)$ for each candidate operating system family is calculated by summing the
 evidence weights contributed across all active strategies:
 \begin{equation}
@@ -28,10 +26,10 @@ P(c) \;=\; \frac{\max(0, \, S(c))}{\sum_{c' \in \mathcal{C}} \max(0, \, S(c'))} 
 \label{eq:prob}
 \end{equation}
 
-\subsubsection{2. Low-Evidence Damping \& Academic Calibration}
-A critical design requirement is academic honesty: the engine must never manufacture artificial
-certainty from sparse data. If a single weak feature matches, an uncalibrated formula might report 100\%
-confidence. To prevent this, the engine enforces a four-stage calibration pipeline:
+\subsubsection{Low-Evidence Damping \& Score Calibration}
+To avoid overstating confidence when few features match, the engine dampens the score when total evidence
+is sparse. If an uncalibrated formula evaluated a single weak feature, it could report 100\% confidence on
+scant data. To prevent this, the engine runs a four-stage calibration pipeline:
 \begin{enumerate}
     \item \textbf{Low-Evidence Damping:} If the total accumulated evidence score falls below the minimum
     reliability threshold $\theta_{\text{damp}} = 4.0$, the winning percentage is damped proportionally:
@@ -47,7 +45,7 @@ confidence. To prevent this, the engine enforces a four-stage calibration pipeli
     \item \textbf{Uncertainty Qualifier:} If the winning confidence satisfies $\text{Confidence} < 40\%$,
     the reported OS family is tagged with an explicit \textsf{"(uncertain)"} disclaimer.
     \item \textbf{Zero-Evidence Fallback:} If $\sum_{c'} S(c') \le 0$ (no features match), the engine
-    returns \textsf{"Unknown"} with a minimal baseline confidence of 20\%.
+    returns \textsf{"Unknown"} with a baseline confidence of 20\%.
 \end{enumerate}
 
 \begin{figure}[htbp]
@@ -159,7 +157,7 @@ The transit hop count is directly deduced as:
     \item $\text{Initial TTL} = 32 \implies \text{Legacy Windows 9x-era stack } (w = +1.0)$.
 \end{itemize}
 
-\subsubsection{Strategy 2: Multi-Sample IP-ID Sequence Classification (Idea 2)}
+\subsubsection{Strategy 2: Multi-Sample IP-ID Sequence Classification}
 \textbf{Protocol Basis (RFC 6864):} Rather than evaluating a single static IP-ID integer, the engine
 transmits a sequence of probes over time, extracts the sequence of IPv4 Identification values
 $\{\mathrm{ID}_0, \mathrm{ID}_1, \ldots, \mathrm{ID}_n\}$, and computes consecutive 16-bit modular deltas:
@@ -175,7 +173,7 @@ The engine categorizes the generation pattern into five concrete mathematical ar
     \item \texttt{RANDOM\_POSITIVE} ($\Delta_i > 1000$): Cryptographic PRNG counter $\implies$ Darwin / BSD ($w = +1.5$).
 \end{enumerate}
 
-\subsubsection{Strategy 3: TCP Timestamp Clock Frequency (\texorpdfstring{$R$}{R}) \& Uptime Recovery (Idea 3)}
+\subsubsection{Strategy 3: TCP Timestamp Clock Frequency (\texorpdfstring{$R$}{R}) \& Uptime Recovery}
 \textbf{Protocol Basis (RFC 7323):} The TCP Timestamp option contains a 32-bit timestamp value
 (\texttt{TSval}) that increments at a fixed kernel clock frequency. By sampling timestamps
 $(\mathrm{TSval}_1, t_1)$ and $(\mathrm{TSval}_2, t_2)$ separated by elapsed physical time $\Delta t$,
@@ -196,7 +194,7 @@ When $R$ is stable, the host uptime is estimated and presented to the operator:
 \text{Estimated Host Uptime (seconds)} \;=\; \frac{\mathrm{TSval}_{\text{latest}}}{R}
 \end{equation}
 
-\subsubsection{Strategy 4: Active RFC 3168 Explicit Congestion Notification (ECN) Probing (Idea 4)}
+\subsubsection{Strategy 4: Active RFC 3168 Explicit Congestion Notification (ECN) Probing}
 \textbf{Protocol Basis (RFC 3168):} The scanner dispatches an active probe segment with both ECN-Echo (ECE)
 and Congestion Window Reduced (CWR) flags asserted ($\text{Flags} = \mathtt{0xC2}$). Under standard RFC~3168
 negotiation, an ECN-aware server echoes ECE while clearing CWR in its SYN/ACK:
@@ -207,7 +205,7 @@ negotiation, an ECN-aware server echoes ECE while clearing CWR in its SYN/ACK:
     \item \texttt{ECN\_DROPPED} (Probe timeout expiration): Middlebox silently drops probe $\implies$ Strict Firewall ($w = +2.0$).
 \end{itemize}
 
-\subsubsection{Strategy 5: Ambiguous TCP Flag Handling (The RFC 793 ``Rule-Breaker'' Probe) (Idea 5)}
+\subsubsection{Strategy 5: Ambiguous TCP Flag Handling (The RFC 793 ``Rule-Breaker'' Probe) }
 \textbf{Protocol Basis (RFC 793 / RFC 9293):} To test RFC conformity, the engine transmits invalid flag
 combinations ($\text{SYN}+\text{FIN} = \mathtt{0x03}$, NULL $= \mathtt{0x00}$, or XMAS $= \mathtt{0x29}$)
 toward open and closed ports. RFC~793 dictates that packets lacking an ACK bit arriving on an open port
@@ -221,7 +219,7 @@ must be silently discarded:
     $\implies \text{Apple Darwin / BSD } (w = +2.5)$.
 \end{itemize}
 
-\subsubsection{Strategy 6: Autonomous ICMP / UDP Diagnostic Battery (Idea 6)}
+\subsubsection{Strategy 6: Autonomous ICMP / UDP Diagnostic Battery }
 \textbf{Protocol Basis (RFC 792):} When TCP ports are comprehensively firewalled, the engine shifts to Layer~3
 and Layer~4 auxiliary protocols:
 \begin{itemize}
@@ -236,7 +234,7 @@ and Layer~4 auxiliary protocols:
     payload segments ($> 28$ bytes, typically up to 328 bytes) ($w_{\text{Windows}} = +2.5$).
 \end{itemize}
 
-\subsubsection{Strategy 7: Cross-Layer Application Banner Correlation \& Header Order (Idea 7.1)}
+\subsubsection{Strategy 7: Cross-Layer Application Banner Correlation \& Header Order }
 \textbf{Protocol Basis (RFC 7230 / Cross-Layer Fusion):} Application-layer service banners provide
 authoritative, declarative evidence that is fused into the Layer~3/4 network stack scoring matrix:
 \begin{itemize}
@@ -254,9 +252,9 @@ authoritative, declarative evidence that is fused into the Layer~3/4 network sta
     into the version refinement engine.
 \end{itemize}
 
-\subsubsection{S-Tier Passive Core: TCP Option Order \& Advertised Window Signatures}
-\textbf{Option Ordering Sequence (Excluding NOP/EOL Padding):} Because TCP option layouts are deeply
-ingrained in kernel networking code, they represent the single most spoof-resistant passive signal ($w = +3.0$):
+\subsubsection{TCP Option Order \& Advertised Window Signatures}
+\textbf{Option Ordering Sequence (Excluding NOP/EOL Padding):} Because TCP option layouts are set
+during kernel compilation, they provide a reliable passive signal ($w = +3.0$):
 \begin{itemize}
     \item Windows 10/11: \texttt{['MSS', 'WSCALE', 'SACK\_PERMITTED']}\\
     or \texttt{['MSS', 'WSCALE', 'SACK\_PERMITTED', 'TIMESTAMP']}
@@ -272,9 +270,9 @@ ingrained in kernel networking code, they represent the single most spoof-resist
 Overlap is deliberately supported ($w = +1.5$) as supporting evidence.
 
 \subsection{Version Tier Refinement Architecture \& Predicates}
-Modern operating system minor builds (e.g., Windows 10 vs Windows 11) share identical network stacks.
-Rather than claiming false precision, the \texttt{refine\_version()} engine refines the winning family
-into coarse, verifiable \textbf{Version Tiers} using explicit mathematical predicates:
+Operating system releases within the same family (such as Windows 10 and Windows 11) often share nearly
+identical network stacks. The \texttt{refine\_version()} function therefore groups candidates into coarse
+version tiers using explicit stack predicates:
 
 \begin{table}[htbp]
 \centering
@@ -316,24 +314,24 @@ Table~\ref{tab:tier_list} ranks all strategies by discriminative power, spoof re
 \renewcommand{\arraystretch}{1.20}
 \caption{Comprehensive OS Fingerprinting Strategy Hierarchy and Effectiveness Tier List}
 \label{tab:tier_list}
-\begin{tabularx}{\textwidth}{@{}C{1.4cm} L{3.4cm} C{1.2cm} L{2.4cm} L{2.2cm} X@{}}
+\begin{tabularx}{\textwidth}{@{}L{3.6cm} C{1.2cm} L{2.4cm} L{2.6cm} X@{}}
 \toprule
-\hdrrow \thh{Tier} & \thh{Strategy / Feature} & \thh{Layer} & \thh{Probe Mode} & \thh{Discriminative Power} & \thh{Primary Operational Trade-off}\\
+\hdrrow \thh{Strategy / Feature} & \thh{Layer} & \thh{Probe Mode} & \thh{Discriminative Power} & \thh{Primary Operational Trade-off}\\
 \midrule
-\textbf{S-Tier} & Banner Correlation (7) & L7 & Passive / Stream & Definitive & Direct declarative evidence; fails if banners stripped.\\
-& TCP Option Order & L4 & Passive SYN/ACK & Extremely High & Kernel-hardcoded layout; requires at least 1 open port.\\
+Banner Correlation (7) & L7 & Passive / Stream & Definitive & Direct declarative evidence; fails if banners stripped.\\
+TCP Option Order & L4 & Passive SYN/ACK & Extremely High & Kernel-hardcoded layout; requires at least 1 open port.\\
 \midrule
-\textbf{A-Tier} & Rule-Breaker Flags (5) & L4 & Active Probe & Very High & Exploits Windows RFC 793 violation; requires active probe.\\
-& IP-ID Sequences (2) & L3 & Multi-Sample & Very High & Differentiates Linux atomic IDs; requires multi-packet tracking.\\
-& Timestamp Clock Rate (3) & L4 & Multi-Sample & High & Exposes kernel timer frequency; requires timing samples.\\
-& Initial TTL Normalization (1) & L3 & Passive / Fallback & High & Universal availability; cannot separate Linux from BSD.\\
+Rule-Breaker Flags (5) & L4 & Active Probe & Very High & Exploits Windows RFC 793 violation; requires active probe.\\
+IP-ID Sequences (2) & L3 & Multi-Sample & Very High & Differentiates Linux atomic IDs; requires multi-packet tracking.\\
+Timestamp Clock Rate (3) & L4 & Multi-Sample & High & Exposes kernel timer frequency; requires timing samples.\\
+Initial TTL Normalization (1) & L3 & Passive / Fallback & High & Universal availability; cannot separate Linux from BSD.\\
 \midrule
-\textbf{B-Tier} & ICMP / UDP Battery (6) & L3 / L4 & Active Probe & Moderate & Orthogonal non-TCP channel; frequently blocked by edge firewalls.\\
-& ECN Probing (4) & L4 & Active Probe & Moderate & Tests RFC 3168 compliance; middleboxes may alter flags.\\
-& TCP Window Signatures & L4 & Passive SYN/ACK & Moderate & Supporting evidence only; high inter-family overlap.\\
+ICMP / UDP Battery (6) & L3 / L4 & Active Probe & Moderate & Orthogonal non-TCP channel; frequently blocked by edge firewalls.\\
+ECN Probing (4) & L4 & Active Probe & Moderate & Tests RFC 3168 compliance; middleboxes may alter flags.\\
+TCP Window Signatures & L4 & Passive SYN/ACK & Moderate & Supporting evidence only; high inter-family overlap.\\
 \midrule
-\textbf{C-Tier} & HTTP Header Sequencing (7b) & L7 & Passive Stream & Low & Web server software dependent; easily altered in configuration.\\
-& IPv4 DF Bit & L3 & Passive & Low & Corroborating only; universally asserted by modern stacks.\\
+HTTP Header Sequencing (7b) & L7 & Passive Stream & Low & Web server software dependent; easily altered in configuration.\\
+IPv4 DF Bit & L3 & Passive & Low & Corroborating only; universally asserted by modern stacks.\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -452,5 +450,33 @@ evidence across the four primary operating system platforms in our testbed.
     macOS / BSD       28%  [#############]
     Windows           10%  [####]
     Network Device     4%  [##]
+=================================================================
+\end{logbox}
+
+\subsubsection{Target 5: Windows 11 Host Behind Firewall (Autonomous ICMP Echo Fallback)}
+When all probed TCP ports are dropped or filtered by an active host-based or edge firewall (leaving zero open or closed TCP ports available for SYN/ACK or RST telemetry), the fingerprinting engine autonomously activates its Layer-3 ICMP Echo fallback pipeline:
+
+\begin{logbox}
+=================================================================
+  [PHASE 3] OS Fingerprinting Telemetry: Windows 11 (Firewall Isolated)
+=================================================================
+  Target Host : 192.168.0.116 (Windows 11 Desktop behind Firewall)
+  Candidate   : ICMP Echo Reply (Zero Open/Closed TCP Ports Available)
+  Likely OS   : Windows                   Confidence : 94%
+  Version Tier: Windows 10 / 11 / Server 2016+ (47%) / Windows 7 / 8 (47%)
+-----------------------------------------------------------------
+  Diagnostic Metric Breakdown:
+    - Candidate   : Autonomous ICMP Echo Reply (RFC 792 Echo Probe)
+    - Initial TTL : 128 (~128 observed, 0 router hops) -> Windows (+4.0)
+    - Window Size : 0 (ICMP non-transport candidate)
+    - DF Bit      : Clear on ICMP Reply -> Windows (+2.0)
+    - Timestamp   : Absent on ICMP channel
+    - ICMP Probe  : Normalized Code 9 to Code 0 with TTL 128 -> Windows (+3.0)
+-----------------------------------------------------------------
+  Normalized Probability Distribution:
+    Windows           94%  [#############################################]
+    Network Device     6%  [###]
+    Linux              0%  []
+    macOS / BSD        0%  []
 =================================================================
 \end{logbox}

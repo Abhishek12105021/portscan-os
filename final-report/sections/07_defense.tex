@@ -1,4 +1,4 @@
-%============================================================= §7 DEFENSE
+%============================================================= SECTION 7: DEFENSE
 \section{Countermeasure: Multi-Vector Active Defense Engine}\label{sec:defense}
 
 Requirement~(d) asks whether a defensive countermeasure was developed to mitigate the attack. In
@@ -150,7 +150,7 @@ SYN+FIN 192.168.0.105 -> 192.168.0.116:21
 [MITIGATION] Released quarantine block on 192.168.0.105 (TTL 60s elapsed, rule deleted)
 \end{logbox}
 
-\subsubsection{2. Linux Netfilter Defense Execution (\texttt{defense\_kali\_test.log})}
+\subsubsection{Linux Netfilter Defense Execution (\texttt{defense\_kali\_test.log})}
 On Linux, the defense agent injects native Netfilter rules. The log verifies the kernel DROP counter
 climbing dynamically as probe packets are dropped before reaching application sockets:
 

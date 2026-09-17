@@ -1,4 +1,4 @@
-%========================================================= §8 VERIFICATION
+%========================================================= SECTION 8: VERIFICATION
 \section{Verification \& Reproducibility}
 
 \subsection{Automated Test Suite}
@@ -69,17 +69,17 @@ desktop that cannot be captured via CLI text alone (Figures~\ref{fig:ssh_desktop
 \label{tab:screenshot_guide}
 \begin{tabularx}{\textwidth}{@{}L{2.2cm} L{2.4cm} L{4.6cm} X@{}}
 \toprule
-\hdrrow \thh{Figure} & \thh{Machine / Node} & \thh{Target Image File} & \thh{Visual Demonstration Focus}\\
+\hdrrow \thh{Figure} & \thh{Machine / Node} & \thh{Demonstration Artifact} & \thh{Visual Demonstration Focus}\\
 \midrule
-Fig.~\ref{fig:ssh_desktop_transition}(a) & Victim Desktop & \path{rsc/normal.png} & Baseline clean state of victim desktop prior to payload delivery.\\
+Fig.~\ref{fig:ssh_desktop_transition}(a) & Victim Desktop & \texttt{normal.png} & Baseline clean state of victim desktop prior to payload delivery.\\
 \addlinespace
-Fig.~\ref{fig:ssh_desktop_transition}(b) & Victim Desktop & \path{rsc/payload.png} & Multi-modal payload files appearing on victim desktop post-exploitation.\\
+Fig.~\ref{fig:ssh_desktop_transition}(b) & Victim Desktop & \texttt{payload.png} & Multi-modal payload files appearing on victim desktop post-exploitation.\\
 \addlinespace
-Fig.~\ref{fig:ssh_artefacts}(a) & Victim Desktop & \path{rsc/proof_of_access.png} & \texttt{PROOF\_OF\_ACCESS.txt} intrusion trophy opened in Notepad.\\
+Fig.~\ref{fig:ssh_artefacts}(a) & Victim Desktop & \texttt{proof\_of\_access.png} & \texttt{PROOF\_OF\_ACCESS.txt} intrusion trophy opened in Notepad.\\
 \addlinespace
-Fig.~\ref{fig:ssh_artefacts}(b) & Victim Desktop & \path{rsc/batch_file.png} & \texttt{HACKED.bat} attack console executing 1000-iteration breach loop.\\
+Fig.~\ref{fig:ssh_artefacts}(b) & Victim Desktop & \texttt{batch\_file.png} & \texttt{HACKED.bat} attack console executing 1000-iteration breach loop.\\
 \addlinespace
-Fig.~\ref{fig:ssh_artefacts}(c) & Victim Desktop & \path{rsc/script.png} & \texttt{hacked.py} payload script executed via command-line terminal on victim node.\\
+Fig.~\ref{fig:ssh_artefacts}(c) & Victim Desktop & \texttt{script.png} & \texttt{hacked.py} payload script executed via command-line terminal on victim node.\\
 \bottomrule
 \end{tabularx}
 \end{table}

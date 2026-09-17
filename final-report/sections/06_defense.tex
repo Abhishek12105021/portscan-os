@@ -1,11 +1,10 @@
-%============================================================= §6 DEFENSE
+%============================================================= SECTION 6: DEFENSE
 \section{Countermeasure: Multi-Vector Active Defense Engine}\label{sec:defense}
 
-Requirement~(d) asks whether a defensive countermeasure was developed to mitigate the attack. In
-our project, this countermeasure constitutes our qualifying bonus deliverable: an autonomous,
-host-based active defense monitor running on the victim node that continuously analyzes raw Layer-2
-traffic, detects scanning patterns in real time, and dynamically severs the attacker's connection
-via kernel firewall rule injection.
+Requirement~(d) calls for a defensive countermeasure against port scanning. To address this,
+we implemented an autonomous host-based defense monitor on the victim node. It analyzes raw Layer-2
+traffic in real time, flags scanning signatures, and blocks the attacker's IP through kernel firewall
+rules.
 
 \subsection{Detection Methodology \& The Four Inspection Vectors}
 The week-11 Design Report proposed a single sliding-window detector. The delivered engine expands
@@ -58,9 +57,8 @@ To ensure robust, production-grade operation, three safeguards are enforced:
     reasons, and rule identifiers.
 \end{enumerate}
 
-\subsection{Sliding-Window Detection and Mitigation Timeline}
-Figure~\ref{fig:timing_defense} illustrates the timeline of a fast port scan being detected and
-quarantined by the victim engine:
+\subsection{Fast SYN Scanning Rate-Threshold Interception Timeline}
+Figure~\ref{fig:fast_defense} illustrates the operational mechanics of the fast sliding-window detector ($W_1 = 10.0\,\text{s}$). When an automated scanner dispatches rapid multi-port probes, the engine tracks both the cumulative probe frequency and unique destination port cardinality. The eighth probe at $t=7.0\,\text{s}$ breaches the burst rate threshold ($\theta_{\text{count}} = 8$ across $\ge 5$ distinct ports), triggering instantaneous injection of an inbound quarantine rule into the kernel packet filter. The ninth probe at $t=8.5\,\text{s}$ is intercepted and dropped before reaching application sockets.
 
 \begin{figure}[htbp]
 \centering
@@ -69,10 +67,10 @@ quarantined by the victim engine:
     \draw[thick, -{Stealth[length=6pt]}, color=ink] (0, 0) -- (14.5, 0) node[right, font=\scriptsize\bfseries] {Time (s)};
     
     % Sliding Observation Window Indicator Bar
-    \draw[accent, thick, |-|] (0.5, 2.45) -- (8.8, 2.45) 
+    \draw[accent, thick, |-|] (0.5, 2.6) -- (9.6, 2.6) 
         node[midway, above=1pt, font=\scriptsize\bfseries, color=accent] {Sliding Observation Window ($W_1 = 10.0\,\text{s}$)};
 
-    % Staggered SYN Probes
+    % Staggered SYN Probes (Low / High alternating to prevent label collision)
     \draw[thick, color=accent] (0.5, 0) -- (0.5, 0.75); \fill[accent] (0.5, 0) circle (2pt);
     \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny\bfseries] at (0.5, 0.95) {SYN :80};
 
@@ -103,17 +101,17 @@ quarantined by the victim engine:
         \draw[thick] (\x, 0.08) -- (\x, -0.08) node[below=2pt, font=\tiny, fill=white, inner sep=1pt] {$t=\timeval$};
     }
 
-    % Threshold Line
-    \draw[thick, dashed, color=accentstrong] (9.6, 1.95) -- (9.6, 2.65);
-    \node[draw=accentstrong, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (9.6, 3.05) {
-        \color{accentstrong}THRESHOLD BREACHED\\
+    % Threshold Line & Callout
+    \draw[thick, dashed, color=accentstrong] (9.6, 1.95) -- (9.6, 2.5);
+    \node[draw=accentstrong, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (9.6, 2.95) {
+        \color{accentstrong}FAST THRESHOLD BREACHED\\
         \tiny $C = 8 \ge \theta_{\text{count}}, \ U = 8 \ge \theta_{\text{ports}}$
     };
 
     % Firewall Injection Callout
     \draw[-{Stealth[length=4pt]}, thick, color=accentstrong] (9.6, -0.45) -- (9.6, -0.85);
     \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny, align=center] at (9.6, -1.25) {
-        \textbf{\color{accent}Dynamic Firewall Rule Injected via \texttt{netsh}}\\
+        \textbf{\color{accent}Dynamic Firewall Quarantine Injected via \texttt{netsh} / \texttt{iptables}}\\
         \texttt{\scriptsize netsh advfirewall add rule dir=in action=block remoteip=192.168.0.105}
     };
 
@@ -124,11 +122,83 @@ quarantined by the victim engine:
         SYN $\to$ :8080\\
         \color{accentstrong}[BLOCKED / DROPPED]
     };
-    \draw[line width=1.1pt, color=accentstrong] (12.3, 0.4) -- (12.7, 0.8);
-    \draw[line width=1.1pt, color=accentstrong] (12.3, 0.8) -- (12.7, 0.4);
+    \draw[line width=1.2pt, color=accentstrong] (12.25, 0.4) -- (12.75, 0.85);
+    \draw[line width=1.2pt, color=accentstrong] (12.25, 0.85) -- (12.75, 0.4);
 \end{tikzpicture}
-\caption{Timeline of Sliding-Window Scan Detection and Dynamic Firewall Rule Injection.}
+\caption{Fast SYN Scanning Sliding-Window Detection and Mitigation Timeline ($W_1 = 10.0\,\text{s}$, $\theta_{\text{count}} = 8$ SYNs across $\ge 5$ distinct ports). Rapid multi-port sweeping breaches the rate threshold at $t=7.0\,\text{s}$, triggering instantaneous kernel firewall rule injection; the subsequent probe at $t=8.5\,\text{s}$ is dropped.}
+\label{fig:fast_defense}
 \label{fig:timing_defense}
+\end{figure}
+
+\subsection{Slow Stealth Scan Detection and Long-Window Trapping Timeline}
+To evade rate-based sliding windows, sophisticated adversaries deliberately inject inter-packet delays ($\Delta t \ge 2.5\,\text{s}$). As illustrated in Figure~\ref{fig:slow_defense}, such pacing ensures that at most $3$ to $4$ probes fall within any 10-second interval, staying comfortably beneath the fast threshold $\theta_{\text{count}} = 8$ and rendering single-window rate limiting ineffective.
+
+To counter this evasion strategy, the defense engine maintains a secondary 60-second cumulative sliding monitor ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$ SYNs). Even with deliberate delay injection, the state table aggregates stealth probes over the extended observation horizon. At $t=50.0\,\text{s}$, the arrival of the 20th probe trips the cumulative threshold, triggering immediate firewall isolation and dropping probe~21 at $t=55.0\,\text{s}$.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+    % Time Axis
+    \draw[thick, -{Stealth[length=6pt]}, color=ink] (0, 0) -- (14.8, 0) node[right, font=\scriptsize\bfseries] {Time (s)};
+
+    % Cumulative Observation Window Indicator Bar (Elevated to y=3.1 for full clearance)
+    \draw[accent, thick, |-|] (0.8, 3.1) -- (14.4, 3.1) 
+        node[midway, above=1pt, font=\scriptsize\bfseries, color=accent] {Cumulative Slow Observation Window ($W_2 = 60.0\,\text{s}$)};
+
+    % Fast Window Evasion Bracket
+    \draw[rule, thick, |-|] (0.8, 1.25) -- (3.0, 1.25) 
+        node[midway, above=1pt, font=\tiny, color=darkslate] {$W_1 = 10\,\text{s}$ ($\le 4$ SYNs $\implies$ Evades fast threshold)};
+
+    % Time Ticks along Time Axis (well spaced: >= 1.1cm apart)
+    \foreach \x/\tval in {0.8/0, 3.0/10, 5.2/20, 7.4/30, 9.6/40, 11.8/50, 13.3/55, 14.4/60} {
+        \draw[thick] (\x, 0.08) -- (\x, -0.08) node[below=2pt, font=\tiny, fill=white, inner sep=0.8pt] {$t=\tval\text{s}$};
+    }
+
+    % Initial Paced Probes in First 10s Window (P1 - P4)
+    \foreach \x/\pname in {0.8/P1, 1.35/P2, 1.9/P3, 2.45/P4} {
+        \fill[accent] (\x, 0) circle (2pt);
+        \draw[thick, color=accent] (\x, 0) -- (\x, 0.45);
+        \node[font=\tiny\bfseries\color{darkslate}] at (\x, 0.6) {\pname};
+    }
+
+    % Paced Continuation Annotation (Elevated to y=1.05 to clear probe ticks)
+    \node[font=\scriptsize\itshape\color{darkslate}] at (6.3, 1.0) {$\cdots$ Paced Stealth Probes ($\Delta t \ge 2.5\,\text{s}$ delay) $\cdots$};
+    \foreach \x/\pnum in {5.2/P8, 7.4/P12, 9.6/P16} {
+        \fill[accent] (\x, 0) circle (1.8pt);
+        \draw[thin, color=accent!70] (\x, 0) -- (\x, 0.35);
+        \node[font=\tiny\color{darkslate}] at (\x, 0.48) {\pnum};
+    }
+
+    % 20th Probe - SLOW THRESHOLD BREACH at t = 50.0s (x = 11.8)
+    \draw[thick, color=accent] (11.8, 0) -- (11.8, 1.2); \fill[accent] (11.8, 0) circle (2pt);
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny\bfseries] at (11.8, 1.45) {SYN P20};
+
+    % Threshold Callout (Center at y=2.45)
+    \draw[thick, dashed, color=accentstrong] (11.8, 1.7) -- (11.8, 2.05);
+    \node[draw=accentstrong, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (11.8, 2.45) {
+        \color{accentstrong}SLOW THRESHOLD BREACHED\\
+        \tiny $C_{\text{long}} = 20 \ge \theta_{\text{slow}} = 20$
+    };
+
+    % Firewall Injection Callout
+    \draw[-{Stealth[length=4pt]}, thick, color=accentstrong] (11.8, -0.45) -- (11.8, -0.85);
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny, align=center] at (11.8, -1.25) {
+        \textbf{\color{accent}Cumulative Firewall Quarantine Injected}\\
+        \texttt{\scriptsize iptables -I INPUT -s 192.168.0.105 -j DROP / netsh}
+    };
+
+    % 21st Probe Blocked at t = 55.0s (x = 13.3)
+    \draw[thick, color=accentstrong] (13.3, 0) -- (13.3, 1.1);
+    \fill[accentstrong] (13.3, 0) circle (2pt);
+    \node[draw=accentstrong, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (13.3, 1.45) {
+        SYN P21\\
+        \color{accentstrong}[BLOCKED]
+    };
+    \draw[line width=1.2pt, color=accentstrong] (13.1, 0.35) -- (13.5, 0.75);
+    \draw[line width=1.2pt, color=accentstrong] (13.1, 0.75) -- (13.5, 0.35);
+\end{tikzpicture}
+\caption{Slow Stealth Scanning Cumulative Long-Window Trapping Timeline ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$ SYNs, $\Delta t \ge 2.5\,\text{s}$). The attacker paces probes to evade the 10-second fast burst window ($\le 4$ probes per 10\,s), but the 60-second cumulative sliding monitor aggregates state over the extended horizon, trapping probe~20 at $t=50.0\,\text{s}$ and dropping probe~21 at $t=55.0\,\text{s}$.}
+\label{fig:slow_defense}
 \end{figure}
 
 \FloatBarrier
@@ -191,10 +261,10 @@ Kernel Packet Drop Counter Audit (`sudo iptables -L INPUT -n -v`):
 \end{logbox}
 
 \subsubsection{Evaluation 3: Live Mid-Attack Chain Severance}
-The definitive operational proof of the active defense bonus is its ability to sever a live attack
-chain mid-execution. During our live end-to-end verification run, the scanner completed its first
-exploit (FTP Anonymous login), but while attempting subsequent exploitation modules, the defense
-engine's firewall rule took effect. All subsequent exploits timed out with \texttt{WinError 10060}:
+To test whether the defense halts an ongoing intrusion, we evaluated the monitor against a live
+attack run. The scanner completed its initial exploit (FTP anonymous login), but the defense
+engine injected a quarantine rule before subsequent modules could connect. All subsequent exploits
+timed out with \texttt{WinError 10060}:
 
 \begin{logbox}
 [VICTIM DEFENSE AGENT LOG]

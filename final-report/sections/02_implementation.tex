@@ -1,4 +1,4 @@
-%========================================================= §2 IMPLEMENTATION
+%========================================================= SECTION 2: IMPLEMENTATION
 \section{Implementation: From-Scratch Packet Layer \& Architecture}
 
 \subsection{Architecture and Software Module Map}
@@ -17,17 +17,17 @@ delivered system layout is detailed in Table~\ref{tab:module_map}.
 \toprule
 \hdrrow \thh{Module Path} & \thh{Engineering Role and Capabilities}\\
 \midrule
-\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{common/ — From-Scratch Binary Framing \& I/O Layer}}}\\
+\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{common/: From-Scratch Binary Framing \& I/O Layer}}}\\
 \texttt{packet.py} & Manual byte-by-byte serialization and parsing for Ethernet II, IPv4, TCP, ICMP, and UDP frames; RFC~1071 16-bit one's complement checksum engine.\\
 \texttt{npcap.py} & Low-level \texttt{ctypes} bindings to Npcap and \texttt{libpcap}; packet injection, promiscuous capture, Windows IP Helper ARP resolution (\texttt{SendARP}), and adapter discovery.\\
 \addlinespace
-\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{attacker/ — Reconnaissance Orchestrator \& Heuristics}}}\\
+\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{attacker/: Reconnaissance Orchestrator \& Heuristics}}}\\
 \texttt{main.py} & Central attack pipeline executing Phases 1--5; CLI options for rate limiting, adapter binding, and exploit skipping.\\
 \texttt{scanner.py} & Phase~1 raw Layer-2 TCP SYN half-open scanner; active diagnostic probe dispatch (ECN-SYN, SYN+FIN rule-breaker, ICMP, and UDP closed-port probes).\\
 \texttt{fingerprint.py} & Phase~3 weighted probabilistic OS classification engine combining seven independent network stack heuristics.\\
 \texttt{banner.py} & Phase~2 service banner grabber with protocol-aware probes (passive FTP greeting capture vs.\ active HTTP \texttt{HEAD} negotiation).\\
 \addlinespace
-\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{attacker/exploits/ — Dynamic, OS-Aware Exploit Battery}}}\\
+\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{attacker/exploits/: Dynamic, OS-Aware Exploit Battery}}}\\
 \texttt{os\_payloads.py} & Phase~4 target adapter mapping OS-fingerprint tiers to targeted payloads (Windows \texttt{win.ini}/\texttt{whoami} vs.\ Linux \texttt{/etc/passwd}/\texttt{id}).\\
 \texttt{ftp\_anon.py} & Exploit~1: RFC~959 unauthenticated anonymous login and passive directory listing (\texttt{PASV} + \texttt{LIST}).\\
 \texttt{ftp\_web\_shell.py} & Exploit~2: Multi-stage FTP file write $\rightarrow$ web-shell upload $\rightarrow$ HTTP CGI RCE $\rightarrow$ automated forensic cleanup.\\
@@ -35,7 +35,7 @@ delivered system layout is detailed in Table~\ref{tab:module_map}.
 \texttt{http\_traversal.py} & Exploit~4: OS-aware unauthenticated directory traversal across canonical, backslash, and URL-encoded vectors.\\
 \texttt{ssh\_bruteforce.py} & Exploit~5: Dictionary brute-force attack via bounded wordlist; quiet reconnaissance vs.\ loud multi-modal payload deployment.\\
 \addlinespace
-\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{defense/ — Active Host-Based Countermeasure Engine}}}\\
+\multicolumn{2}{@{}l}{\textit{\color{accent}\textbf{defense/: Active Host-Based Countermeasure Engine}}}\\
 \texttt{detector.py} & Multi-vector inspection engine (fast sliding window, slow stealth window, decoy canary honeyports, and RFC~793 invalid flag traps).\\
 \texttt{main.py} & Passive packet ingestion loop, cross-platform firewall mitigation (\texttt{netsh} and \texttt{iptables}), self-healing TTL daemon, and JSON SIEM logging.\\
 \bottomrule
@@ -43,8 +43,8 @@ delivered system layout is detailed in Table~\ref{tab:module_map}.
 \end{table}
 
 \subsection{Binary Frame and Packet Construction Methodology}
-A foundational requirement of Project~\#8 is that no off-the-shelf packet-crafting library (such
-as Scapy or Nmap) may be utilized. Every network protocol data unit (PDU) dispatched by the
+A core project requirement is that no off-the-shelf packet-crafting library (such
+as Scapy or Nmap) may be used. Every network protocol data unit (PDU) dispatched by the
 toolkit is manually packed byte-by-byte into raw binary buffers using Python's \texttt{struct}
 module.
 
@@ -202,8 +202,7 @@ This architecture eliminates the need for hardcoded MAC addresses and allows the
 builder to operate transparently across heterogeneous physical or virtualized interfaces.
 
 \subsection{Operational Safety Rails}\label{sec:safety}
-To ensure the toolkit remains strictly an educational reconnaissance instrument and cannot be
-misused as an aggressive denial-of-service tool, five non-bypassable safeguards are enforced:
+To prevent aggressive probing and accidental denial-of-service, five safeguards are built into the scanner:
 \begin{itemize}
     \item \textbf{RFC~1918 Scope Validation:} Targets are verified via Python's \texttt{ipaddress}
     library; public or routable Internet addresses are rejected immediately.

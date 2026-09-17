@@ -1,4 +1,4 @@
-%============================================================= §7 RESULTS
+%============================================================= SECTION 7: RESULTS
 \section{Results, Success Analysis \& Empirical Verification Matrix}\label{sec:results}
 
 This section answers requirements~(b) and~(c): whether each phase of the attack succeeded, the
@@ -62,91 +62,88 @@ Attack}, (3)~\textbf{Expected Outcome}, (4)~\textbf{Actual Observed Outcome}, (5
 Analysis (Why It Differs)}, (6)~\textbf{Underlying Defense Mechanism}, and (7)~\textbf{Defense
 Operational Verdict (Does It Work as Expected?)}.
 
-\subsubsection{1. Deep-Dive on Exploit 3: RFC~959 FTP Bounce Attack (The Sole Exploit Failure)}
-Across our entire exploitation battery, the \textbf{FTP Bounce Attack was the only attack that did
-not succeed as an offensive exploit}. This divergence represents a critical empirical finding regarding
-modern defense-in-depth engineering:
+\subsubsection{Deep-Dive on Exploit 3: RFC~959 FTP Bounce Attack (The Sole Exploit Failure)}
+Across our exploitation battery, the \textbf{FTP Bounce Attack was the only module that did
+not succeed as an offensive exploit}. This divergence illustrates an important protection
+in modern operating system kernels:
 
 \begin{itemize}[leftmargin=1.4em]
     \item \textbf{Attack Process:} The attacker establishes an unauthenticated control session on TCP port~21
     with the target FTP daemon. Rather than opening a standard passive data channel, the attacker issues an
     RFC~959 \texttt{PORT $h_1,h_2,h_3,h_4,p_1,p_2$} command directing the FTP daemon to open an active data
     connection toward an internal service on the victim workstation (\texttt{192.168.0.116:80}). The attacker
-    subsequently triggers a transfer command (\texttt{LIST}), forcing the FTP server daemon to initiate an
-    outbound TCP SYN packet from its own socket to the internal service port, effectively attempting to utilize
-    the FTP server as an arbitrary TCP port scanner and relay proxy.
+    subsequently triggers a transfer command (\texttt{LIST}), attempting to force the FTP daemon to open an
+    outbound TCP connection from its own socket to the internal service port, using the FTP server as an
+    arbitrary TCP port scanner and proxy.
     
-    \item \textbf{Assumptions Regarding the Attack:} The exploit fundamentally relies on four critical assumptions:
+    \item \textbf{Assumptions Regarding the Attack:} The exploit relies on four assumptions:
     \begin{enumerate}[label=(\alph*)]
         \item The FTP server daemon strictly implements legacy RFC~959 specifications without modern RFC~2577 security extensions.
-        \item The FTP daemon permits unauthenticated relay connections to third-party endpoints without validating whether the IP address specified in the \texttt{PORT} command matches the source IP of the client's control connection.
-        \item The FTP daemon process possesses operating system socket privileges to initiate outbound connections toward arbitrary privileged ports ($<1024$ or internal HTTP/SSH ports).
-        \item The underlying host operating system kernel does not enforce stateful socket isolation between separate local interfaces or loopback endpoints.
+        \item The FTP daemon permits relay connections to third-party endpoints without checking whether the IP address specified in the \texttt{PORT} command matches the client's control connection.
+        \item The FTP daemon process has operating system permissions to initiate outbound connections toward arbitrary ports ($<1024$ or internal HTTP/SSH ports).
+        \item The underlying host kernel does not isolate sockets across separate network interfaces.
     \end{enumerate}
 
-    \item \textbf{Expected Outcome:} In a legacy, unmitigated deployment, the FTP daemon connects directly to
+    \item \textbf{Expected Outcome:} In a vulnerable legacy deployment, the FTP daemon connects directly to
     \texttt{192.168.0.116:80}, executing a TCP 3-way handshake on behalf of the attacker. If the target port is
     open, the daemon returns \texttt{150 Opening data connection} followed by \texttt{226 Transfer complete}. If
-    the target port is closed or filtered, the daemon returns \texttt{425 Can't open data connection}. This provides
-    the attacker with two capabilities: (i)~reconnaissance of internal, firewalled subnets; and (ii)~anonymized
-    traffic pivoting where the victim host sees connections originating from the trusted FTP server rather than the attacker.
+    the target port is closed or filtered, the daemon returns \texttt{425 Can't open data connection}. This allows
+    an attacker to port-scan internal subnets while masking their true IP.
 
-    \item \textbf{Actual Observed Outcome:} The attack \hl{completely failed to establish a relay connection},
+    \item \textbf{Actual Observed Outcome:} The attack \hl{failed to establish a relay connection},
     aborting with the client-side diagnostic:
     \begin{center}
     \texttt{500 Connection error: [WinError 10053] An established connection was aborted by the software in your host machine.}
     \end{center}
     No data connection was opened to port~80, and no port-state telemetry could be extracted through the relay.
 
-    \item \textbf{Divergence Analysis (Why It Differs):} The actual outcome diverged directly from the historical
-    exploit expectation due to kernel-level stateful socket isolation enforced by the modern operating system.
-    Specifically, the \textbf{Windows Filtering Platform (WFP)} and modern Winsock kernel drivers maintain strict
-    session lineage tracking. When the FTP server process attempted to dispatch a TCP SYN packet to a destination
-    address that did not match the established peer IP of the controlling client, the WFP stateful engine detected
-    an unauthorized cross-socket redirection attempt. The host kernel immediately triggered an abortive socket reset
-    (\texttt{WSAECONNABORTED} / WinError 10053), terminating the connection before the outbound SYN could traverse the network adapter.
+    \item \textbf{Divergence Analysis (Why It Differs):} The actual outcome diverged from the historical
+    exploit expectation due to kernel-level stateful socket isolation. Specifically, the \textbf{Windows Filtering
+    Platform (WFP)} and Winsock kernel drivers track session ownership. When the FTP server process attempted to
+    send a TCP SYN to an IP address different from the controlling client, the WFP filter detected an unauthorized
+    cross-socket redirection. The host kernel issued an abortive socket reset (\texttt{WSAECONNABORTED} / WinError 10053),
+    terminating the connection before the outbound SYN could leave the network adapter.
 
-    \item \textbf{Underlying Defense Mechanism:} Dual-layer defensive engineering:
+    \item \textbf{Underlying Defense Mechanism:} Dual-layer protection:
     \begin{enumerate}[label=(\alph*)]
         \item \emph{Host OS Network Layer:} The Windows Filtering Platform (WFP) stateful connection-tracking engine monitors cross-interface socket bindings and aborts unauthorized inter-process socket relays.
-        \item \emph{Application Layer (RFC 2577):} Hardened FTP daemons validate that the IP argument in the \texttt{PORT} command strictly matches the remote IP of the control connection (\texttt{sock.getpeername()}), rejecting third-party addresses with \texttt{500 Illegal PORT command}.
+        \item \emph{Application Layer (RFC 2577):} Hardened FTP daemons validate that the IP argument in the \texttt{PORT} command matches the remote IP of the control connection (\texttt{sock.getpeername()}), rejecting third-party addresses with \texttt{500 Illegal PORT command}.
     \end{enumerate}
 
-    \item \textbf{Defense Operational Verdict (Does It Work as Expected?):} \textbf{Yes, it works exactly as expected.}
-    The defense operated with 100\% effectiveness, completely neutralizing the proxying mechanism. This empirical
-    divergence proves that defense-in-depth protections embedded in modern operating systems successfully eliminate
-    historical RFC~959 bounce vulnerabilities.
+    \item \textbf{Defense Operational Verdict (Does It Work as Expected?):} \textbf{Yes, it works as expected.}
+    The host defense severed the relay attempt at the transport layer, demonstrating that modern network stack
+    protections render RFC~959 bounce attacks ineffective.
 \end{itemize}
 
-\subsubsection{2. Comparative Observations Across All Attack Vectors}
+\subsubsection{Comparative Observations Across All Attack Vectors}
 Table~\ref{tab:attack_observations} provides the systematic observations across all six evaluated modules
 according to the supervisor's evaluation framework:
 
 \begin{table}[htbp]
 \centering
 \scriptsize
-\renewcommand{\arraystretch}{1.22}
+\renewcommand{\arraystretch}{1.10}
 \caption{Systematic Attack Observations: Process, Assumptions, Expected vs.\ Actual Outcomes, and Defense Verdict}
 \label{tab:attack_observations}
 \begin{tabularx}{\textwidth}{@{}L{2.4cm} X X L{3.2cm}@{}}
 \toprule
 \hdrrow \thh{Attack Vector} & \thh{Process \& Underlying Assumptions} & \thh{Expected vs.\ Actual Outcome} & \thh{Defense Mechanism \& Verdict}\\
 \midrule
-\textbf{FTP Anonymous Access} (\S\ref{sec:exploits}) &
+\textbf{FTP Anonymous Access} (Section~\ref{sec:exploits}) &
 Submits \texttt{USER anonymous}; assumes server permits unauthenticated guest sessions and directory listing. &
 \textbf{Expected:} Return 230, list directory.\newline
 \textbf{Actual:} \textbf{Success} (Code 230; listed \texttt{index.html}, \texttt{pub/}, \texttt{uploads/}). &
 Disable anonymous logins; require strict authentication.\newline
 \textbf{Verdict: Works as expected}.\\
 \addlinespace
-\textbf{FTP Web-Shell CGI RCE} (\S\ref{sec:exploits}) &
+\textbf{FTP Web-Shell CGI RCE} (Section~\ref{sec:exploits}) &
 Uploads \texttt{shell.py} via \texttt{STOR}, triggers \texttt{whoami} via HTTP GET; assumes writeable directory is served as CGI. &
 \textbf{Expected:} Remote code execution.\newline
 \textbf{Actual:} \textbf{Success} (Executed \texttt{whoami} $\to$ \texttt{homed01\textbackslash turjo}; payload deleted). &
 Separate web root from upload path; mount uploads with \texttt{noexec}.\newline
 \textbf{Verdict: Works as expected}.\\
 \addlinespace
-\textbf{RFC 959 FTP Bounce Attack} (\S\ref{sec:exploits}) &
+\textbf{RFC 959 FTP Bounce Attack} (Section~\ref{sec:exploits}) &
 Sends \texttt{PORT 192,168,0,116,0,80} + \texttt{LIST}; assumes daemon relays data connections to third-party hosts without kernel isolation. &
 \textbf{Expected:} Proxy port scan.\newline
 \textbf{Actual:} \textbf{Failed / Mitigated} (\texttt{WinError 10053}; aborted by WFP).\newline
@@ -154,21 +151,21 @@ Sends \texttt{PORT 192,168,0,116,0,80} + \texttt{LIST}; assumes daemon relays da
 WFP stateful socket isolation; RFC~2577 \texttt{PORT} address validation.\newline
 \textbf{Verdict: Works as expected}.\\
 \addlinespace
-\textbf{HTTP Directory Traversal} (\S\ref{sec:exploits}) &
+\textbf{HTTP Directory Traversal} (Section~\ref{sec:exploits}) &
 Issues relative dot-dot-slash paths; assumes web daemon lacks input path canonicalization and has OS file read permissions. &
 \textbf{Expected:} Exfiltrate target config.\newline
 \textbf{Actual:} \textbf{Success} (Retrieved \texttt{win.ini} on Win 11; \texttt{/etc/passwd} on Linux). &
 Strict path sanitization (\texttt{realpath}); container chroot jailing.\newline
 \textbf{Verdict: Works as expected}.\\
 \addlinespace
-\textbf{SSH Weak Credentials} (\S\ref{sec:exploits}) &
+\textbf{SSH Weak Credentials} (Section~\ref{sec:exploits}) &
 Dictionary brute force over port~22; assumes password authentication allowed, weak password in dictionary, no rate limiting. &
 \textbf{Expected:} Remote terminal access.\newline
 \textbf{Actual:} \textbf{Success} (Cracked on attempt 15/20; deployed desktop artifacts). &
 Enforce public-key authentication; fail2ban dynamic IP lockout; MFA.\newline
 \textbf{Verdict: Works as expected}.\\
 \addlinespace
-\textbf{Active Defense Quarantining} (\S\ref{sec:defense}) &
+\textbf{Active Defense Quarantining} (Section~\ref{sec:defense}) &
 Passive L2 capture monitor, sliding-window rate tracking, canary traps; assumes attacker scans multiple ports rapidly. &
 \textbf{Expected:} Auto-block attacker.\newline
 \textbf{Actual:} \textbf{Success (Bonus)} (Severed attack chains at 8 SYNs on Win/Linux). &
@@ -178,12 +175,13 @@ Dynamic firewall rule injection with self-healing auto-release TTL.\newline
 \end{tabularx}
 \end{table}
 
-\subsubsection{3. Probabilistic Confidence Calibration vs.\ False Certainty}
-A complementary observation in our evaluation is that OS fingerprinting confidence ranged from 48\% to 76\%,
-never claiming an artificial 100\%. This reflects scientific rigor: initial TTL~64 is shared between Linux and Darwin,
-NAT gateways can normalize IP IDs, and targets with closed ports offer sparse telemetry. Our engine honestly reports
-calibrated probabilities and coarse OS tiers rather than fabricating false certainty.
+\subsubsection{Probabilistic Confidence Calibration vs.\ False Certainty}
+In our evaluation, OS fingerprinting confidence ranged from 48\% to 76\%, rather than reporting
+an unrealistic 100\%. Initial TTL~64 is shared between Linux and Darwin, NAT gateways can normalize
+IP IDs, and targets with closed ports offer sparse telemetry. The engine reports calibrated
+probabilities and coarse OS tiers rather than claiming certainty where signals overlap.
 
+\FloatBarrier
 \subsection{Victim Server Daemon Observations}
 The victim node hosted vulnerable lab services (\path{victim/http_server.py} on port~80 and
 \path{victim/ftp_server.py} on port~21). The corresponding daemon logs below record the inbound
@@ -214,45 +212,46 @@ Table~\ref{tab:master_matrix} summarizes the definitive empirical verification r
 laboratory testbed, cross-referencing target systems, operational environments, and observed results
 without relying on raw file labels:
 
-\begin{table}[htbp]
+\begin{table}[!ht]
 \centering
 \footnotesize
-\renewcommand{\arraystretch}{1.2}
+\renewcommand{\arraystretch}{1.08}
 \caption{Consolidated Master Matrix of Empirical Verification Test Runs}
 \label{tab:master_matrix}
-\begin{tabularx}{\textwidth}{@{}L{4.0cm} L{2.4cm} L{2.8cm} X@{}}
+\begin{tabularx}{\textwidth}{@{}L{3.8cm} L{2.4cm} L{2.6cm} X@{}}
 \toprule
 \hdrrow \thh{Empirical Evaluation Scenario} & \thh{Target Platform} & \thh{Defense State} & \thh{Key Attribution \& Observed Outcome}\\
 \midrule
 Full Attack Chain \& Active Defense & Windows 11 Desktop & Active Blocker On & Windows 62\%; 3/4 exploits succeeded; severed mid-attack on Run 2.\\
-\addlinespace
+\addlinespace[2pt]
 Dynamic OS-Aware Exploitation & Win 11 + Kali 6.x & Passive / Off & Dynamic payload swap: \texttt{win.ini}/\texttt{whoami} vs.\ \texttt{/etc/passwd}/\texttt{id}.\\
-\addlinespace
+\addlinespace[2pt]
 Closed-Port RST \& ICMP Evaluation & Kali Linux 6.x VM & Passive / Off & Linux 76\% (Closed-port RST alone) / 67\% (ICMP Code 9 fallback).\\
-\addlinespace
+\addlinespace[2pt]
 100-Port Comprehensive Range Scan & Windows 11 Host & Passive / Off & Batch 1: Win 71\% (SYN/ACK); Batch 2: Win 69\% (Zero open ports RST).\\
-\addlinespace
+\addlinespace[2pt]
 Darwin / BSD Mobile Stack Telemetry & Apple iPad (iPadOS) & Passive / Off & macOS/BSD 48\% (Darwin option order: WScale before Timestamp).\\
-\addlinespace
+\addlinespace[2pt]
 Android Linux Mobile Stack Telemetry & Android 14 Phone & Passive / Off & Linux 58\% (SACK before TS, RFC 6864 all-zero IP-ID with DF set).\\
-\addlinespace
+\addlinespace[2pt]
 OpenSSH Weak-Credential Compromise & Windows OpenSSH & Passive / Off & Windows 75\%; cracked \texttt{test:test123}; loud desktop payloads deployed.\\
-\addlinespace
+\addlinespace[2pt]
 Windows Firewall Dynamic Quarantine & Windows 11 Desktop & Windows Firewall & Tripped at 8 SYNs; canary port 81 trapped; auto-released after 60s TTL.\\
-\addlinespace
+\addlinespace[2pt]
 Linux Netfilter Dynamic Mitigation & Kali Linux VM & Linux Netfilter & Dynamic Netfilter DROP rule; drop counter progressed 12 $\to$ 16 pkts.\\
 \bottomrule
 \end{tabularx}
 \end{table}
 
+\clearpage
 \subsection{Cross-Platform Network Stack Signature Comparison}
 Table~\ref{tab:os_comparison} details the empirical behavioral metrics that allowed the engine to
 differentiate Microsoft Windows from Unix-like operating systems:
 
-\begin{table}[htbp]
+\begin{table}[!ht]
 \centering
-\small
-\renewcommand{\arraystretch}{1.2}
+\footnotesize
+\renewcommand{\arraystretch}{1.0}
 \caption{Cross-Platform Stack Behavioral Signatures Observed in Empirical Testbed}
 \label{tab:os_comparison}
 \begin{tabularx}{\textwidth}{@{}L{3.6cm} L{4.4cm} X@{}}
@@ -271,3 +270,4 @@ RCE Command Execution & \texttt{whoami} $\to$ \texttt{homed01\textbackslash turj
 \bottomrule
 \end{tabularx}
 \end{table}
+\FloatBarrier

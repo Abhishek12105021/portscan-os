@@ -1,9 +1,9 @@
-%========================================================= §3 PORT SCANNING & BANNER GRABBING
+%========================================================= SECTION 3: PORT SCANNING & BANNER GRABBING
 \section{Phase 1 \& 2: TCP SYN Port Scanning and Service Banner Grabbing}\label{sec:scan_banner}
 
 Network reconnaissance begins by identifying active listening transport endpoints and interrogating
 exposed services for daemon identity strings. This section details the protocol handshakes, timing
-mechanics, and rich empirical console logs captured during large-scale network scanning.
+mechanics, and console logs captured during scanning.
 
 \subsection{Phase 1: TCP SYN Half-Open Port Scanning Methodology}
 Standard TCP socket connections conform to RFC~793 by completing a full three-way handshake:
@@ -208,8 +208,7 @@ capture software identity strings:
 
 \FloatBarrier
 \subsection{Empirical Service Banner Telemetry Across Evaluation Targets}
-Rather than aggregating disparate systems into an artificial single log, the engine's authentic Phase~2
-output is presented below across each dedicated laboratory target:
+The Phase~2 banner output from each testbed target is shown below:
 
 \begin{logbox}
 =================================================================
