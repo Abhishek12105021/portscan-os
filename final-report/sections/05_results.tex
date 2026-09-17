@@ -1,0 +1,50 @@
+%============================================================= §5 RESULTS
+\section{Results \& Success Analysis}\label{sec:results}
+
+This section answers requirement~(b): was the attack successful, and why or why not.
+
+\subsection{Per-phase verdict}
+\renewcommand{\arraystretch}{1.25}
+\noindent\begin{tabularx}{\textwidth}{@{}L{4.2cm} L{2.6cm} X@{}}
+\toprule
+\hdrrow \thh{Phase / exploit} & \thh{Outcome} & \thh{Evidence}\\
+\midrule
+SYN port scan & \textbf{Success} & Open/closed/filtered states matched \texttt{netstat} on the victim; 100-port scale run classified all ports correctly.\\
+Banner grabbing & \textbf{Success} & LabFTP, VulnHTTP, Apache, and Microsoft/Debian OpenSSH banners extracted.\\
+OS fingerprinting & \textbf{Success$^\ast$} & Correct OS \emph{family} on all five stacks; confidence 48--76\% ($^\ast$probabilistic — see below).\\
+FTP anonymous login & \textbf{Success} & \texttt{230 Login successful}; \texttt{/pub} and \texttt{/uploads} listed.\\
+FTP web-shell RCE & \textbf{Success} & \texttt{whoami} $\rightarrow$ \texttt{homed01\textbackslash turjo}; artefact deleted.\\
+HTTP traversal & \textbf{Success} & \texttt{win.ini} / \texttt{/etc/passwd} read across encodings.\\
+SSH weak credentials & \textbf{Success} & Cracked \texttt{test:test123}; remote recon and payload drop executed.\\
+FTP bounce & \textbf{Mitigated} & Rejected by the host stack — a correct, expected negative result (below).\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\subsection{Why the attack succeeded}
+Three properties made the chain effective. First, the \textbf{from-scratch packet layer is
+correct}: because we parse the raw response ourselves, the fingerprint reads true stack
+behaviour rather than library-normalised values, and the scanner's port classification
+matched the victim's ground truth on every run. Second, the \textbf{fingerprint is robust
+by combining many weak signals} — no single feature has to be decisive, so an altered TTL
+or a suppressed timestamp does not derail the verdict. Third, and most importantly, the
+\textbf{OS-aware payload stage closes the recon-to-exploitation loop}: the same binary read
+\texttt{win.ini} on Windows and \texttt{/etc/passwd} on Linux automatically, which is why
+the cross-platform run succeeded on both hosts without manual retargeting.
+
+\subsection{Where it did not succeed — and why that is correct}
+Two outcomes are deliberately \emph{not} full successes, and both are informative rather
+than defects.
+
+\begin{itemize}
+\item \textbf{FTP bounce was mitigated.} The pivot was rejected by the Windows host with
+\texttt{[WinError 10053]} — the modern kernel / Windows Filtering Platform refuses
+unauthorised third-party \texttt{PORT} connections. Our tool correctly \emph{detected and
+reported} the mitigation rather than failing silently, which is the right behaviour for a
+reconnaissance tool.
+\item \textbf{Fingerprinting is probabilistic, not certain.} Confidence sat at 48--76\%,
+not 100\%. This is honest by design: TTL~64 cannot by itself separate Linux from macOS/BSD,
+NAT and firewalls can alter fields, and a low-open-port target offers less evidence. We
+report coarse OS tiers with their confidence rather than a fabricated exact build — a
+deliberate accuracy choice, not a limitation we hide.
+\end{itemize}

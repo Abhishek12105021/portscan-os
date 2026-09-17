@@ -1,0 +1,275 @@
+%==============================================================================
+%  CSE 406 — Security Lab Project #8
+%  Port Scanning with OS Information / Version — FINAL REPORT
+%
+%  Compile:  pdflatex final_report.tex   (run twice for refs/ToC)
+%==============================================================================
+\documentclass[11pt,a4paper]{article}
+
+%------------------------------------------------------------------ Geometry
+\usepackage[margin=2.4cm,top=2.5cm,bottom=2.5cm]{geometry}
+
+%---------------------------------------------------------------- Typography
+\usepackage{mathptmx}                 % Times body + math
+\usepackage[scaled=0.90]{helvet}      % Helvetica for headings/sans
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{parskip}
+\setlength{\parskip}{5pt}
+
+%-------------------------------------------------------- Tables / lists / fig
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.4em}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{caption}
+
+%------------------------------------------------------------------- Palette
+% Red-based scheme. Accent = deep crimson used for headings, rules, table
+% headers; a stronger pure red is reserved for genuine highlights.
+\usepackage{xcolor}
+\definecolor{ink}{RGB}{28,32,38}          % near-black body ink
+\definecolor{accent}{RGB}{155,26,32}      % deep crimson (primary accent)
+\definecolor{primary}{RGB}{155,26,32}     % alias used by the cover page
+\definecolor{accentstrong}{RGB}{200,16,24}% stronger red for real emphasis
+\definecolor{accentsoft}{RGB}{247,228,229}% pale red for table header fill
+\definecolor{rule}{RGB}{209,213,219}      % hairline grey
+\definecolor{codebg}{RGB}{248,246,246}    % subtle mono frame background
+\color{ink}
+
+%------------------------------------------------------ Captions (understated)
+\captionsetup{labelfont={bf,sf,color=accent},textfont={small},labelsep=period,skip=6pt}
+
+%------------------------------------------------- Section headings (clean, thin rule)
+\usepackage{titlesec}
+\titleformat{\section}
+  {\sffamily\large\bfseries\color{accent}}
+  {\thesection}{0.7em}{}[{\vspace{2pt}\color{rule}\titlerule[0.8pt]}]
+\titleformat{\subsection}
+  {\sffamily\normalsize\bfseries\color{ink}}
+  {\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{16pt}{7pt}
+\titlespacing*{\subsection}{0pt}{11pt}{4pt}
+
+%--------------------------------------------------- Header / footer (minimal)
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\pagestyle{fancy}\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{rule}\leaders\hrule height 0.4pt\hfill}}
+\fancyhead[L]{\footnotesize\sffamily\color{accent}CSE 406 — Project \#8}
+\fancyhead[R]{\footnotesize\sffamily\color{ink}Port Scanning \& OS Fingerprinting}
+\fancyfoot[C]{\footnotesize\sffamily\color{ink}\thepage\ / \pageref{LastPage}}
+
+%----------------------------------------------------- Log / code excerpt box
+% A subtle single-tint monospace frame — used consistently for tool output.
+% Content is VERBATIM (via listings) so backslashes, braces, underscores,
+% and ? in console output render literally with no escaping.
+\usepackage[most]{tcolorbox}
+\tcbuselibrary{listings}
+\newtcblisting{logbox}{
+  breakable, enhanced, sharp corners,
+  colback=codebg, colframe=rule, boxrule=0.5pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+  listing only,
+  listing options={
+    basicstyle=\ttfamily\footnotesize\color{ink},
+    breaklines=true, columns=fullflexible, keepspaces=true,
+    aboveskip=0pt, belowskip=0pt}}
+
+% Raw-log listing style: tiny wrapping monospace for the full-log appendix.
+% \rawlog{<file>}{<caption>} inputs a complete sanitised log verbatim.
+\lstdefinestyle{rawlog}{
+  basicstyle=\ttfamily\fontsize{6.4}{7.4}\selectfont\color{ink},
+  breaklines=true, breakatwhitespace=false,
+  columns=fullflexible, keepspaces=true,
+  showstringspaces=false, tabsize=2,
+  frame=single, rulecolor=\color{rule}, framesep=4pt,
+  backgroundcolor=\color{codebg},
+  breakindent=0pt, postbreak=\mbox{\textcolor{rule}{$\hookrightarrow$}\space},
+  xleftmargin=2pt, xrightmargin=2pt, aboveskip=6pt, belowskip=2pt}
+\newcommand{\rawlog}[2]{%
+  \needspace{4\baselineskip}%
+  {\vspace{2pt}\noindent\sffamily\small\bfseries\color{accent}#2}\par\vspace{2pt}%
+  \lstinputlisting[style=rawlog]{logs/#1}\par\vspace{4pt}}
+
+% A restrained key-point callout — used sparingly (only for real highlights).
+\newtcolorbox{keypoint}[1][Key point]{
+  enhanced, sharp corners,
+  colback=accentsoft, colframe=accent, boxrule=0pt,
+  leftrule=2.5pt, left=9pt,right=9pt,top=6pt,bottom=6pt,
+  fonttitle=\sffamily\bfseries\footnotesize\color{accent},
+  title={#1}, coltitle=accent}
+
+% Captioned figure PLACEHOLDER (team drops the real screenshot in later).
+% Renders a clean framed box so the PDF compiles before images exist.
+\newcommand{\shotplaceholder}[1]{%
+  \begin{center}
+  \setlength{\fboxrule}{0.6pt}\setlength{\fboxsep}{0pt}%
+  \textcolor{rule}{\fbox{\parbox[c][2.4cm][c]{0.86\linewidth}{\centering
+  \sffamily\footnotesize\color{accent}[\,SCREENSHOT\,]\\[2pt]
+  \color{ink}\normalfont\footnotesize #1}}}%
+  \end{center}}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
+\usepackage[hidelinks]{hyperref}
+\usepackage{needspace}   % keep a heading + first lines together on a page
+
+% Strong inline highlight — a genuine emphasis, used sparingly.
+\newcommand{\hl}[1]{\textbf{\color{accentstrong}#1}}
+
+% Keep every section heading from landing on the last line of a page:
+% reserve ~4 lines before each \section so the heading + opening text stay together.
+\let\origsection\section
+\renewcommand{\section}{\Needspace*{4\baselineskip}\origsection}
+
+%------------------------------------------------------------- New column type
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+
+% Table header helper: pale accent fill + bold sans
+\newcommand{\thh}[1]{\textbf{\sffamily #1}}
+\usepackage{colortbl}
+\newcommand{\hdrrow}{\rowcolor{accentsoft}}
+
+\begin{document}
+
+%==============================================================================
+%  COVER PAGE
+%==============================================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\centering
+\vspace*{0.4cm}
+
+% --- LOGO ---
+\includegraphics[width=0.22\textwidth]{rsc/buet.png}\\[0.8cm]
+
+% --- INSTITUTION ---
+{\Large \textsc{Bangladesh University of Engineering and Technology}}\\[0.3cm]
+{\large \textsc{Department of Computer Science and Engineering}}\\[0.4cm]
+{\normalsize CSE 406 — Computer Security Lab \quad·\quad Semester January 2026}\\[1.6cm]
+
+% --- TITLE BLOCK ---
+{\color{primary}\rule{\linewidth}{1mm}}\\[0.55cm]
+{\LARGE\bfseries\color{primary} Port Scanning with OS Fingerprinting}\\[0.5cm]
+{\large\bfseries Project \#8 — Attack Tools Implementation}\\[0.5cm]
+{\color{primary}\rule{\linewidth}{1mm}}\\[1.4cm]
+
+% --- SUBTITLE ---
+{\Large\bfseries Final Report \& Implementation Demo}\\[2.6cm]
+
+\vfill
+
+% --- TEAM + SUPERVISOR side by side ---
+\begin{minipage}[t]{0.52\textwidth}
+\centering
+{\large\bfseries Submitted By}\\[0.5cm]
+{\renewcommand{\arraystretch}{1.35}\normalsize
+\begin{tabular}{rl}
+\textbf{2105033} & Abhishek Roy\\
+\textbf{2105032} & Nawriz Ahmed Turjo\\
+\end{tabular}}
+\end{minipage}%
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+{\large\bfseries Supervised By}\\[0.5cm]
+{\large\bfseries Anwarul Bashir Shuaib}\\[0.15cm]
+{\normalsize Lecturer}\\[0.05cm]
+{\footnotesize Dept.\ of Computer Science \& Engineering, BUET}
+\end{minipage}
+
+\vspace{1.6cm}
+
+% --- DATE ---
+{\large \today}\\[0.4cm]
+\end{titlepage}
+
+%==============================================================================
+%  ABSTRACT + MEMBER RESPONSIBILITIES  (front matter)
+%==============================================================================
+\setcounter{page}{1}
+
+\section*{\sffamily\color{accent}Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+This report documents the final implementation of a complete, self-authored network
+reconnaissance and exploitation toolkit for Project~\#8, together with a defensive
+countermeasure that qualifies for the defense bonus. Every Ethernet frame, IPv4 packet,
+and TCP segment is constructed and parsed by our own code; no ready-made tool
+(Nmap, Scapy) performs any attack step. Npcap and \texttt{libpcap} are used only as raw
+packet I/O.
+
+The delivered system substantially \emph{exceeds} the week-11 Design Report. Three upgrade
+layers landed after that submission: (i)~the OS-fingerprinting engine grew from a single
+passive SYN/ACK feature table into a \textbf{seven-strategy probabilistic engine}
+(RST analysis, IP-ID sequencing, TCP-timestamp clock recovery, ECN probing, invalid-flag
+probing, an ICMP/UDP battery, and cross-layer banner correlation); (ii)~the exploit set
+became a \textbf{dynamic, OS-aware battery} of five modules across FTP, HTTP, and SSH; and
+(iii)~the defense grew into a \textbf{four-vector, cross-platform auto-quarantine engine}
+with self-healing firewall rules.
+
+The toolkit was verified on a heterogeneous testbed of five real operating systems
+(Windows~11, Kali~Linux, Android, iPadOS/Darwin, and an embedded-Linux router), with
+\textbf{68/68} automated tests passing. Fingerprint attribution ranged from 48\%–76\%
+confidence — reported honestly as coarse OS tiers, never as false certainty — and the
+active defense severed live attack chains mid-execution on both Windows Firewall and Linux
+Netfilter.
+
+%------------------------------------------------------ Member responsibilities
+\section*{\sffamily\color{accent}Group Member Responsibilities}
+\addcontentsline{toc}{section}{Group Member Responsibilities}
+
+Per the project requirement, the table below states which member was responsible for each
+part of the implementation. Both members jointly authored the reports and participated in
+the multi-device empirical verification.
+
+\renewcommand{\arraystretch}{1.3}
+\noindent\begin{tabularx}{\textwidth}{@{}L{4.2cm} X@{}}
+\toprule
+\hdrrow \thh{Member} & \thh{Responsibility}\\
+\midrule
+\textbf{Abhishek Roy}\newline\small(2105033) &
+Binary framing and raw packet I/O — the from-scratch Ethernet/IPv4/TCP builder and
+parser, RFC~1071 Internet checksum, Npcap \texttt{ctypes} bindings, and ARP/interface
+resolution via the Windows IP Helper API. The TCP~SYN half-open scanning engine and
+port-state tracking. Core OS-fingerprinting heuristics and version-tier calibration.
+The \textbf{HTTP directory-traversal} and \textbf{SSH weak-credential} exploit modules.\\
+\addlinespace
+\textbf{Nawriz Ahmed Turjo}\newline\small(2105032) &
+Advanced fingerprinting and active stimulus probing — the SYN option-offering probe,
+closed-port RST fallback, IP-ID / timestamp / ECN / ICMP-UDP strategies, and cross-layer
+banner correlation. The service banner grabber. The \textbf{FTP exploit suite}
+(anonymous login, write$\rightarrow$web-shell$\rightarrow$RCE, and bounce) with
+\textbf{OS-aware payload selection}. The multi-vector active-defense engine and the
+end-to-end attack orchestration.\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\clearpage
+{\hypersetup{linkcolor=ink}\tableofcontents}
+\clearpage
+
+%==============================================================================
+%  BODY  — sections filled in subsequent edits
+%==============================================================================
+
+\input{sections/01_intro}
+\input{sections/02_implementation}
+\input{sections/03_attack_steps}
+\input{sections/04_fingerprint}
+\input{sections/05_results}
+\input{sections/06_observed}
+\input{sections/06b_empirical}
+\input{sections/07_defense}
+\input{sections/08_verification}
+\input{sections/09_conclusion}
+\input{sections/10_logs_appendix}
+
+\end{document}

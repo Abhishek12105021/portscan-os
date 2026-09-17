@@ -1,0 +1,86 @@
+%========================================================= §2 IMPLEMENTATION
+\section{Implementation Overview}
+
+\subsection{Architecture and module map}
+The toolkit is organised under \texttt{Imp/} as four cooperating packages: a shared
+packet layer, the attacker chain, the victim lab services, and the defense engine. The
+map below reflects the actual delivered layout.
+
+\renewcommand{\arraystretch}{1.2}
+\noindent\begin{tabularx}{\textwidth}{@{}L{4.6cm} X@{}}
+\toprule
+\hdrrow \thh{Module} & \thh{Role}\\
+\midrule
+\multicolumn{2}{@{}l}{\textit{\color{accent}common/ — from-scratch packet layer}}\\
+\texttt{packet.py} & Manual Ethernet / IPv4 / TCP / ICMP / UDP construction, parsing, and checksums.\\
+\texttt{npcap.py} & \texttt{ctypes} bindings to the Npcap / \texttt{libpcap} API; packet I/O plus ARP and local IP/MAC resolution.\\
+\addlinespace
+\multicolumn{2}{@{}l}{\textit{\color{accent}attacker/ — reconnaissance \& orchestration}}\\
+\texttt{main.py} & Orchestrator chaining all five phases; \texttt{--skip-exploits}, \texttt{--skip-banners}, delay flags.\\
+\texttt{scanner.py} & Phase 1 raw SYN half-open scanner; also builds ECN-SYN, SYN+FIN, ICMP, and UDP probes.\\
+\texttt{fingerprint.py} & Phase 3 probabilistic OS classifier (the engine of Section~\ref{sec:fp}).\\
+\texttt{banner.py} & Phase 2 service banner grabbing with per-port protocol hints.\\
+\bottomrule
+\end{tabularx}
+
+\vspace{4pt}
+\noindent\begin{tabularx}{\textwidth}{@{}L{4.6cm} X@{}}
+\toprule
+\hdrrow \thh{Module} & \thh{Role}\\
+\midrule
+\multicolumn{2}{@{}l}{\textit{\color{accent}attacker/exploits/ — the exploit battery}}\\
+\texttt{os\_payloads.py} & Phase 4 OS-aware payload map (Windows / Linux / macOS-BSD).\\
+\texttt{ftp\_anon.py} & FTP anonymous login + directory listing (pure socket).\\
+\texttt{ftp\_web\_shell.py} & Chained FTP write $\rightarrow$ web-shell upload $\rightarrow$ HTTP CGI RCE $\rightarrow$ cleanup.\\
+\texttt{ftp\_bounce.py} & FTP \texttt{PORT} bounce / pivot (RFC-1918-bounded, read-only).\\
+\texttt{http\_traversal.py} & OS-aware HTTP directory traversal (pure socket, read-only).\\
+\texttt{ssh\_bruteforce.py} & SSH weak-credential dictionary attack + post-exploitation (quiet/loud).\\
+\addlinespace
+\multicolumn{2}{@{}l}{\textit{\color{accent}defense/ — active countermeasure}}\\
+\texttt{detector.py} & Multi-vector scan detector + cross-platform firewall mitigation.\\
+\texttt{main.py} & Passive capture loop and CLI.\\
+\addlinespace
+\multicolumn{2}{@{}l}{\textit{\color{accent}victim/ — intentionally vulnerable lab servers}}\\
+\texttt{ftp\_server.py} & Simulated vulnerable FTP (anon write, arbitrary \texttt{PORT}).\\
+\texttt{http\_server.py} & Simulated vulnerable HTTP (traversal + CGI execution).\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\subsection{The from-scratch packet layer}
+The project rule is absolute: we must craft our own frame, packet, and segment. The
+\texttt{common/packet.py} module does this byte-by-byte. A SYN probe is assembled as a
+14-byte Ethernet header, a 20-byte IPv4 header, and a 20-byte TCP header plus options,
+with both the IPv4 header checksum and the TCP checksum (computed over the 12-byte IPv4
+pseudo-header) produced by our own RFC~1071 one's-complement routine. Npcap only moves
+the finished bytes onto and off the wire; it makes no decision about what to send or how
+to interpret a reply.
+
+Because a half-open SYN scan operates below the OS socket layer, the toolkit must resolve
+its own link-layer details. \texttt{npcap.py} obtains the outbound interface and local MAC
+through the Windows IP~Helper API (\texttt{GetAdaptersInfo}) and resolves the target's MAC
+with \texttt{SendARP}, falling back to the ARP cache when a reply is missed. This is what
+lets us emit a complete Ethernet frame rather than relying on the kernel to fill it in.
+
+\begin{keypoint}[Why ``our own code'' matters here]
+Every discriminating fingerprint feature — TTL, window, option order, IP-ID behaviour —
+is read from bytes \emph{we} parsed out of the raw response. Nothing is delegated to a
+library that could normalise or hide those fields. The correctness of the packet layer is
+therefore the foundation the entire fingerprinting engine stands on, and it is covered
+directly by \texttt{test\_packet.py}.
+\end{keypoint}
+
+\subsection{Operational safety rails}\label{sec:safety}
+The scanner is deliberately bounded so it cannot become a denial-of-service tool:
+
+\begin{itemize}
+\item \textbf{Private-only targeting.} Targets are validated with \texttt{ipaddress}; any
+non-RFC-1918 address is refused.
+\item \textbf{Bounded probing.} A hard \texttt{MAX\_PROBES~=~50} cap per run, with a
+mandatory inter-probe delay, keeps traffic to reconnaissance volumes.
+\item \textbf{Read-only exploits.} The FTP modules are bounded to \texttt{PWD}/\texttt{LIST}
+and clean up any artefact they create; HTTP traversal is a read-only \texttt{GET}; SSH uses
+a small bounded wordlist with a per-attempt delay.
+\item \textbf{Reversible defense.} Firewall mitigation is opt-in (\texttt{--block}), every
+injected rule carries a TTL, and all rules are removed on clean exit.
+\end{itemize}

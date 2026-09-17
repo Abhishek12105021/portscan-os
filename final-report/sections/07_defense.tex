@@ -1,0 +1,78 @@
+%============================================================= §7 DEFENSE
+\section{Countermeasure: Active Defense Engine}\label{sec:defense}
+
+Requirement~(d) asks whether we designed a countermeasure and how. We did, and it is the
+project's bonus deliverable: a host-based detector that recognises the scan in real time
+and can quarantine the attacker automatically. It runs on the victim and treats our own
+scanner as the adversary.
+
+\subsection{From the designed detector to a multi-vector engine}
+The Design Report proposed a single fast sliding-window SYN detector with a Windows-only
+\texttt{netsh} block. The delivered engine keeps that as one vector and adds three more,
+plus cross-platform mitigation and self-healing.
+
+\renewcommand{\arraystretch}{1.25}
+\noindent\begin{tabularx}{\textwidth}{@{}L{3.6cm} X@{}}
+\toprule
+\hdrrow \thh{Detection vector} & \thh{How it works}\\
+\midrule
+Fast SYN window & Alerts when one source sends $\geq$8 SYNs across $\geq$5 distinct ports within 10\,s. The dual count-and-diversity condition suppresses false positives from a busy legitimate client.\\
+Slow / stealth window & A longer 60\,s window ($\geq$20 SYNs) catches low-and-slow scans that deliberately pace probes to evade the fast window.\\
+Invalid-flag detection & Any NULL, FIN-only, XMAS, or SYN+FIN packet is flagged instantly — no legitimate traffic uses these, so one such packet is enough.\\
+Canary honeyport & Any connection to a decoy port (default 81), which no real service uses, triggers instant quarantine — the attacker cannot know which ports are decoys.\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\subsection{From detection to mitigation}
+When \texttt{--block} is set, a detected attacker is quarantined by injecting a firewall
+rule — \texttt{netsh advfirewall} on Windows or \texttt{iptables -I INPUT … -j DROP} on
+Linux. Three properties make this safe to run live:
+
+\begin{itemize}
+\item \textbf{Idempotent.} An already-blocked IP is not re-blocked, so the flood of alerts
+during a scan produces exactly one rule.
+\item \textbf{Self-healing.} A background thread releases each rule after a configurable TTL
+(default 300\,s), and all rules are removed on clean exit — a false positive can never
+become a permanent block.
+\item \textbf{Whitelisted \& audited.} Trusted hosts (gateway, admin) are exempt, and every
+block is appended to a JSON incident log with timestamp, source, reason, and rule — a small
+SIEM-style audit trail.
+\end{itemize}
+
+Every firewall command is executed with \texttt{shell=False}, so the attacker's IP cannot
+be used for command injection.
+
+\subsection{The defense in action}
+The engine was exercised through Scenarios~A--G on both Windows Firewall and Linux
+Netfilter. Each vector fired as designed: the fast window tripped on the 8th SYN, the
+canary severed the attacker on the very packet that touched port~81, the slow window caught
+a 2.5\,s-spaced scan at its 20th probe, and the invalid-flag vector caught the fingerprint
+engine's own SYN+FIN probe immediately.
+
+\begin{logbox}
+[ALERT]    192.168.0.105 | fast port scan (SYN=8, distinct ports=8 within 10.0s)
+[MITIGATION] Blocked TCP traffic from 192.168.0.105
+             Firewall rule : CustomPortScanBlock_192_168_0_105 (Windows)
+[ALERT]    192.168.0.105 | hit canary honeyport (81)
+[MITIGATION] Released quarantine block on 192.168.0.105 (TTL 60s elapsed)
+\end{logbox}
+
+\shotplaceholder{Victim defense console — live multi-vector alerts and the auto-quarantine
+mitigation messages during an attack run.}
+
+\shotplaceholder{Firewall rule state — \texttt{netsh advfirewall firewall show rule}
+(or \texttt{iptables -L -n -v}) confirming the injected block and its drop counter.}
+
+The most convincing evidence is the end-to-end run: with the defense active, the attacker's
+first exploit completed, but every subsequent stage timed out as the firewall dropped its
+packets. \textbf{The reconnaissance-to-exploitation chain was severed mid-execution.}
+
+\subsection{Why it works, and its limits}
+The four vectors have complementary blind spots — invalid-flags catches only malformed
+probes, the fast window only quick scans, the slow window is late by nature, the canary
+only fires when a decoy is touched — so an attacker must evade all four at once, which is
+close to impossible for any comprehensive scan. The honest limits: a sufficiently slow scan
+(minutes between probes) can still slip beneath both windows, and a spoofed source can
+provoke a block against the wrong IP — which is precisely why mitigation is opt-in,
+whitelisted, TTL-bounded, and fully reversible.

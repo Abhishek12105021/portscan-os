@@ -1,0 +1,104 @@
+%============================================================ §1 INTRODUCTION
+\section{Introduction \& Recap of the Design}
+
+\subsection{The attack and its objective}
+Network reconnaissance is the opening move of any intrusion: before an attacker can act,
+they must learn which services a target exposes, what software versions run there, and
+which operating system underpins them. Project~\#8 asks us to build exactly this
+capability — \emph{port scanning with OS information / version} — and to do so entirely
+from scratch, crafting every frame, packet, and segment in our own code.
+
+Our toolkit realises a full reconnaissance-to-exploitation chain in five phases —
+(1)~raw TCP~SYN port scanning, (2)~service banner grabbing, (3)~probabilistic OS
+fingerprinting, (4)~OS-aware payload selection, and (5)~a dynamic exploit battery —
+paired with (6)~a defensive detector that recognises the scan and can quarantine the
+attacker in real time.
+
+\subsection{What changed since the Design Report}
+The week-11 Design Report proposed a solid but comparatively modest system. During
+implementation the project grew well beyond that proposal along three independent axes.
+This report is organised around that growth: each core section contrasts the
+\emph{originally designed} behaviour with the \emph{delivered} implementation. The table
+below is the map.
+
+\renewcommand{\arraystretch}{1.3}
+\noindent\begin{tabularx}{\textwidth}{@{}L{3.3cm} L{5.3cm} X@{}}
+\toprule
+\hdrrow \thh{Area} & \thh{Design Report (week 11)} & \thh{Delivered implementation}\\
+\midrule
+OS fingerprinting &
+Single passive SYN/ACK feature table (TTL, window, MSS, WScale, SACK, timestamp, option
+order). &
+\textbf{Seven-strategy probabilistic engine}: RST analysis, IP-ID sequencing,
+timestamp-clock recovery, ECN probe, invalid-flag probe, ICMP/UDP battery, cross-layer
+banner correlation — with confidence scoring and coarse version tiers.\\
+\addlinespace
+Exploit suite &
+Three fixed proof-of-concept exploits (FTP anon, SSH, HTTP). &
+\textbf{Five OS-aware modules} with dynamic payload selection: FTP anonymous, FTP
+write$\rightarrow$web-shell$\rightarrow$RCE, FTP bounce, HTTP traversal, and SSH
+brute-force with quiet/loud post-exploitation.\\
+\addlinespace
+Active defense &
+Single fast sliding-window SYN detector; Windows-only \texttt{netsh} block. &
+\textbf{Four-vector, cross-platform engine}: fast + slow windows, invalid-flag detection,
+canary honeyport; \texttt{netsh} \emph{and} \texttt{iptables}; self-healing TTL release,
+whitelist, and JSON incident logging.\\
+\addlinespace
+Test topology &
+One generic Windows victim. &
+\textbf{Five real operating systems} — Windows~11, Kali~Linux, Android, iPadOS/Darwin,
+embedded-Linux router.\\
+\addlinespace
+Verification &
+Manual observation. &
+\textbf{68 automated tests} plus twelve archived empirical run logs.\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\subsection{Lab topology}
+The verification testbed is a single isolated private LAN. The attacker is a Windows~11
+laptop running the toolkit over an Npcap adapter; the primary victim is a Windows~11
+desktop hosting the vulnerable lab services; and a set of secondary targets on the same
+subnet exercises the fingerprinting engine against genuinely different TCP/IP stacks.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily\footnotesize, >={Stealth[length=2mm]},
+  box/.style={rectangle, rounded corners=2pt, draw=rule, line width=0.7pt,
+              fill=codebg, minimum height=0.95cm, align=center, inner sep=5pt},
+  atk/.style={box, draw=accent, line width=1.2pt, fill=accentsoft},
+  vic/.style={box, draw=accent, line width=1.2pt},
+  hub/.style={rectangle, rounded corners=2pt, draw=accent, line width=1pt,
+              fill=white, align=center, inner sep=6pt, minimum height=1.1cm}]
+
+% attacker (left)
+\node[atk] (atk) at (0,0) {\textbf{Attacker}\\[1pt]Windows 11 Laptop\\[1pt]\scriptsize scanner · fingerprint\\\scriptsize exploits · Npcap};
+
+% LAN hub (centre)
+\node[hub] (sw) at (5.6,0) {\textbf{Isolated LAN}\\[1pt]\scriptsize 192.168.x.0/24};
+
+% targets (right column, well separated)
+\node[vic]  (vic)  at (11.4,2.7)  {\textbf{Primary Victim} — Windows 11\\[1pt]\scriptsize FTP 21 · HTTP 80 · SSH 22 · defense};
+\node[box] (kali) at (11.4,1.1)  {Kali Linux VM \scriptsize(Netfilter)};
+\node[box] (mob)  at (11.4,-0.3) {Android · iPadOS / Darwin};
+\node[box] (rtr)  at (11.4,-1.7) {Embedded-Linux router};
+
+% attacker -> hub, label ABOVE the long edge (no overlap)
+\draw[->,line width=1pt,accent] (atk) -- node[above=1pt,font=\scriptsize\color{accent}]{raw SYN / probes} (sw);
+
+% hub -> each target
+\draw[->,line width=0.8pt,rule] (sw) -- (vic);
+\draw[->,line width=0.8pt,rule] (sw) -- (kali);
+\draw[->,line width=0.8pt,rule] (sw) -- (mob);
+\draw[->,line width=0.8pt,rule] (sw) -- (rtr);
+\end{tikzpicture}
+\caption{Heterogeneous verification testbed. One attacker drives probes across five
+distinct operating-system stacks on an isolated private LAN.}
+\end{figure}
+
+\noindent The attacker never leaves this private range: an RFC~1918 check refuses any
+non-private target, and the scanner is bounded (Section~\ref{sec:safety}) so that it
+cannot be repurposed as a flooding tool.

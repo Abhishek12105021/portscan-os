@@ -1,0 +1,53 @@
+%============================================================= §6 OBSERVED
+\section{Observed Output Across Machines}
+
+Requirement~(c) asks what was observed on each machine involved. Because the toolkit is a
+scanner whose primary evidence \emph{is} its printed output, the console logs below are the
+core artefacts; the placeholders mark where the corresponding demonstration screenshots
+are inserted.
+
+\subsection{Attacker PC}
+The attacker machine shows the full chain: scan states, the fingerprint verdict with its
+evidence, and the exploit results (all illustrated in Section~\ref{sec:steps}). In the
+active-defense run, the attacker also observes the chain being severed mid-execution —
+the first exploit completes, then subsequent connections time out with
+\texttt{WinError~10060} as the victim's firewall drops the attacker's packets.
+
+\subsection{Victim PC}
+The victim side shows the other half of each exploit. The vulnerable FTP and HTTP servers
+log the anonymous login, the web-shell upload and its CGI execution, and the traversal
+request. In SSH loud mode the victim's desktop receives the trophy artefacts and a spoken
+alert.
+
+\begin{logbox}
+[victim FTP]  230 anonymous login  |  STOR uploads/shell.py  |  DELE uploads/shell.py
+[victim HTTP] GET /uploads/shell.py?cmd=whoami  ->  200 (executed)
+[victim HTTP] GET /..%5c..%5cwindows%5cwin.ini  ->  200 (file served)
+\end{logbox}
+
+\shotplaceholder{Victim server terminals — FTP and HTTP server logs recording the
+anonymous login, web-shell upload/execution, and traversal request.}
+
+\shotplaceholder{Victim desktop — the dropped \texttt{HACKED.py} / \texttt{.bak} trophy
+files opened, showing the attacker's message. (The synthesised voice alert plays on the
+victim's speakers and is noted here but cannot be captured as an image.)}
+
+\subsection{Other machines on the network}
+The secondary targets each produced distinct, stack-characteristic responses, which is
+what let the fingerprinting engine tell them apart. The Windows-vs-Kali comparison below
+is the clearest single illustration.
+
+\renewcommand{\arraystretch}{1.25}
+\noindent\begin{tabularx}{\textwidth}{@{}L{3.4cm} X X@{}}
+\toprule
+\hdrrow \thh{Signal} & \thh{Windows 11 desktop} & \thh{Kali Linux VM}\\
+\midrule
+Initial TTL & 128 & 64\\
+IP-ID sequence & strict-incremental & all-zero (RFC 6864)\\
+ECN response & ignored (0x12) & supported (0x52)\\
+Banner & Microsoft OpenSSH & Debian OpenSSH / Apache\\
+OS-aware payload & \texttt{win.ini} / \texttt{whoami} & \texttt{/etc/passwd} / \texttt{id}\\
+RCE proof & \texttt{homed01\textbackslash turjo} & \texttt{uid=0(root)}\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}

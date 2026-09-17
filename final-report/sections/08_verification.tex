@@ -1,0 +1,70 @@
+%========================================================= §8 VERIFICATION
+\section{Verification \& Reproducibility}
+
+\subsection{Automated test suite}
+Correctness is protected by an automated suite that runs offline, with no network or root
+required. All \textbf{68 tests pass}.
+
+\renewcommand{\arraystretch}{1.25}
+\noindent\begin{tabularx}{\textwidth}{@{}L{4.6cm} X@{}}
+\toprule
+\hdrrow \thh{Test file} & \thh{Covers}\\
+\midrule
+\texttt{test\_packet.py} & Ethernet/IPv4/TCP build \& parse, RFC~1071 checksum, option decoding.\\
+\texttt{test\_fingerprint.py} & TTL normalisation, IP-ID / timestamp / ECN classification, RST path, version tiers.\\
+\texttt{test\_exploits.py} & Exploit module behaviour and payload selection.\\
+\texttt{test\_defense.py} & Fast-scan, canary, invalid-flag, whitelist, and TTL auto-release logic.\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\begin{logbox}
+$ python -m pytest Imp/tests/ -q
+............................................................  [100%]
+68 passed
+\end{logbox}
+
+\subsection{Reproducing the demo}
+The environment is pinned for a reproducible demo: Python~3.11, Npcap (WinPcap-compatible
+mode) or \texttt{libpcap} on Linux, and \texttt{paramiko} for the SSH exploit only. Typical
+run sequence:
+
+\begin{logbox}
+# 1. victim: start the vulnerable lab services + defense
+python victim/ftp_server.py ;  python victim/http_server.py
+python defense/main.py --adapter "<ADAPTER>" --block
+
+# 2. attacker: list adapters, then run the full chain
+python tools/list_npcap_adapters.py
+python attacker/main.py --target <VICTIM_IP> --ports 21 22 80 81 --adapter "<ADAPTER>"
+
+# 3. offline: run the test suite
+python -m pytest Imp/tests/ -q
+\end{logbox}
+
+Twelve verified run logs covering all five operating systems and both defense platforms are
+archived under \texttt{final-log/} for cross-checking every empirical claim in this report.
+
+%========================================================= APPENDIX: figures
+\section*{\sffamily\color{accent}Appendix A — Screenshot Insertion Guide}
+\addcontentsline{toc}{section}{Appendix A — Screenshot Insertion Guide}
+
+Each placeholder in this report maps to one image the team supplies. Replace the
+\texttt{\textbackslash shotplaceholder\{…\}} macro with \texttt{\textbackslash includegraphics}
+at the same location.
+
+\renewcommand{\arraystretch}{1.25}
+\noindent\begin{tabularx}{\textwidth}{@{}L{2.2cm} L{3.1cm} X@{}}
+\toprule
+\hdrrow \thh{Section} & \thh{Machine} & \thh{What the screenshot shows}\\
+\midrule
+\S3 Phase 1 & Attacker & SYN scan output — open/closed/filtered with TTL \& window.\\
+\S3 Phase 5 & Attacker & Exploit battery — FTP listing, web-shell RCE, traversal contents.\\
+\S3 Phase 5 & Victim & SSH loud-mode desktop trophy (\texttt{.py} / \texttt{.bak} files).\\
+\S6 & Victim & FTP + HTTP server logs of login/upload/execute/traversal.\\
+\S6 & Victim & Trophy files opened showing the attacker message.\\
+\S7 & Victim & Defense console — multi-vector alerts \& quarantine.\\
+\S7 & Victim & Firewall rule state \& drop counter.\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}

@@ -1,0 +1,95 @@
+%========================================================= §3 ATTACK STEPS
+\section{Attack Steps \& Execution}\label{sec:steps}
+
+This section answers requirement~(a): the concrete steps of the attack, with the tool's
+own output as evidence and captioned placeholders for the demonstration screenshots. The
+whole chain is driven by one command, for example:
+
+\begin{logbox}
+python attacker/main.py --target 192.168.0.116 --ports 21 22 80 81 \
+       --adapter "\Device\NPF_{...}"
+\end{logbox}
+
+\subsection{Phase 1 — TCP SYN port scanning}
+The scanner sends a raw SYN to each target port and classifies the reply: a SYN/ACK means
+\textsc{open} (and no ACK is returned, keeping the connection half-open); a RST means
+\textsc{closed}; silence past the timeout means \textsc{filtered}. Every open/closed reply
+is also retained as OS-fingerprint evidence.
+
+\begin{logbox}
+[PHASE 1] TCP SYN Port Scanning  ->  192.168.0.116
+   21  OPEN                           TTL=128 WIN=65535
+   80  OPEN                           TTL=128 WIN=65535
+   22  NO RESPONSE / POSSIBLY FILTERED
+   81  NO RESPONSE / POSSIBLY FILTERED
+\end{logbox}
+
+\shotplaceholder{Attacker console — Phase 1 SYN scan output showing OPEN / CLOSED /
+FILTERED port states with TTL and window values.}
+
+\subsection{Phase 2 — service banner grabbing}
+For each open port the grabber opens a full TCP connection and reads the service's
+identifying banner; for HTTP it sends a \texttt{HEAD} probe and parses the \texttt{Server}
+header. Banners feed both the report and the cross-layer fingerprint stage.
+
+\begin{logbox}
+[PHASE 2] Service Banner Grabbing
+   21  FTP   -> 220 LabFTP Server Ready
+   80  HTTP  -> Server: VulnHTTP/1.0 (Lab Demo)
+\end{logbox}
+
+\subsection{Phase 3 — OS fingerprinting}
+The retained response features are scored by the probabilistic engine, which emits a most
+likely OS family, a confidence percentage, a coarse version tier, and the evidence behind
+the score. The engine and its seven strategies are detailed in Section~\ref{sec:fp}; a
+representative verdict:
+
+\begin{logbox}
+[PHASE 3] OS Fingerprinting
+   Likely OS  : Windows family        Confidence : 62%
+   Version    : Windows 10 / 11 tier
+   Evidence   : TTL=128 | WIN=65535 | IP-ID strict-incremental [27057,27059,27062]
+              : TCP timestamp clock ~1000 Hz | ECN ignored | Windows option order
+\end{logbox}
+
+\subsection{Phase 4 — OS-aware payload selection}
+Before any exploit runs, \texttt{os\_payloads.py} adapts the payloads to the fingerprinted
+OS: a Windows verdict selects \texttt{windows\textbackslash win.ini} and \texttt{whoami};
+a Linux verdict selects \texttt{/etc/passwd} and \texttt{id}. This closes the loop between
+reconnaissance and weaponisation — the same binary attacks a Windows and a Linux host
+differently, automatically.
+
+\subsection{Phase 5 — exploit battery}
+Each applicable exploit then executes. The FTP suite and HTTP traversal are pure-socket;
+SSH uses \texttt{paramiko} for key exchange only, with our own attack logic on top.
+
+\begin{itemize}
+\item \textbf{FTP anonymous login} — authenticates as \texttt{anonymous}, then
+\texttt{PWD}/\texttt{LIST} to prove data access.
+\item \textbf{FTP write $\rightarrow$ web-shell $\rightarrow$ RCE} — uploads
+\texttt{shell.py} into the writable \texttt{uploads/} directory, requests
+\texttt{/uploads/shell.py?cmd=whoami} over HTTP to execute it, then deletes the artefact.
+\item \textbf{FTP bounce} — attempts a \texttt{PORT} pivot; on a modern host this is
+correctly rejected (see Section~\ref{sec:results}).
+\item \textbf{HTTP directory traversal} — reads the OS-selected sensitive file across
+several encodings (\texttt{..\textbackslash}, \texttt{../}, URL-encoded).
+\item \textbf{SSH weak credentials} — brute-forces a small bounded wordlist, then runs
+silent recon (quiet mode) or drops desktop trophy files and a spoken alert (loud mode).
+\end{itemize}
+
+\begin{logbox}
+[EXPLOIT] FTP Web-Shell RCE (port 21+80)
+  Status : SUCCESS   whoami -> homed01\turjo   (artefact cleaned up)
+[EXPLOIT] HTTP Directory Traversal (port 80)
+  Status : SUCCESS   read windows\win.ini  ([fonts] Arial=arial.ttf ...)
+[EXPLOIT] FTP Bounce (port 21)
+  Status : MITIGATED  [WinError 10053] connection aborted by host WFP
+\end{logbox}
+
+\shotplaceholder{Attacker console — Phase 5 exploit battery: FTP anonymous listing,
+web-shell RCE output, and HTTP traversal file contents.}
+
+\shotplaceholder{Victim desktop (SSH loud mode) — the injected \texttt{HACKED.py} script
+and the \texttt{.bak}/text trophy file left on the Desktop with the attacker's message.
+(The spoken voice alert is triggered on the victim's speakers and cannot be shown in a
+still image.)}

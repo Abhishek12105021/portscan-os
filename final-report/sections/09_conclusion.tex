@@ -1,0 +1,42 @@
+%========================================================= §9 CONCLUSION
+\section{Conclusion}
+
+The project delivers a complete, self-authored port-scanning and OS-fingerprinting toolkit
+that meets every requirement of Project~\#8 and substantially exceeds its own Design Report.
+Every frame, packet, and segment is built by our code; the reconnaissance chain runs
+end-to-end from SYN scan to OS-aware exploitation; and the system was proven against five
+real operating systems with a fully automated test suite.
+
+Relative to the week-11 design, three subsystems grew markedly: the fingerprinting engine
+(one feature table $\rightarrow$ seven weighted strategies with honest confidence tiers),
+the exploit battery (three fixed exploits $\rightarrow$ five OS-aware modules), and the
+defense (one detector $\rightarrow$ a four-vector, cross-platform, self-healing
+auto-quarantine engine). That last subsystem is our claim to the \textbf{defense bonus}: it
+detected our own scanner in real time and severed the attack chain mid-execution on both
+Windows Firewall and Linux Netfilter.
+
+Throughout, we favoured honesty over spectacle — probabilistic verdicts with stated
+confidence, mitigations that are opt-in and reversible, and a strictly bounded scanner that
+cannot be turned into a weapon. The result is a tool that is both effective and safe to
+demonstrate.
+
+%--------------------------------------------------------------- References
+\section*{\sffamily\color{accent}Appendix B — References}
+\addcontentsline{toc}{section}{Appendix B — References}
+
+\begin{enumerate}[leftmargin=1.6em]
+\item Fyodor (G. Lyon), \textit{Remote OS Detection via TCP/IP Stack Fingerprinting},
+Phrack~54, 1998; Nmap Reference Guide — OS Detection.
+\item RFC~793 / RFC~9293 — Transmission Control Protocol.
+\item RFC~791 — Internet Protocol; RFC~1071 — Computing the Internet Checksum.
+\item RFC~6864 — Updated Specification of the IPv4 ID Field.
+\item RFC~7323 — TCP Extensions for High Performance (timestamps, window scaling).
+\item RFC~3168 — The Addition of ECN to IP; RFC~2018 — TCP Selective Acknowledgement.
+\item RFC~792 — ICMP; RFC~1122 — Requirements for Internet Hosts.
+\item RFC~7230 — HTTP/1.1 Message Syntax and Routing; RFC~4253 — SSH Transport Layer.
+\item RFC~4987 — TCP SYN Flooding Attacks and Common Mitigations.
+\item MITRE ATT\&CK — T1046 (Network Service Scanning), T1110 (Brute Force),
+T1078 (Valid Accounts).
+\item Reference material in \texttt{rsc/}: \textit{OS Fingerprinting for Beginners};
+\textit{OS/Application Fingerprinting Techniques}; default TTL value tables.
+\end{enumerate}

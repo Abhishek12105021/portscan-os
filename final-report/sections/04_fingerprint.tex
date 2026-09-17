@@ -1,0 +1,165 @@
+%========================================================= §4 FINGERPRINTING
+\section{OS Fingerprinting Engine}\label{sec:fp}
+
+The fingerprinting engine is the largest single upgrade over the Design Report and the
+technical centrepiece of the project. Where the design proposed a single passive feature
+table, the delivered engine combines seven independent strategies into one probabilistic
+verdict.
+
+\subsection{The scoring model}
+The Design Report's fingerprinting was a static lookup table. The delivered engine keeps
+that table as one input but wraps it in a \textbf{weighted probabilistic model}. Every
+strategy~$k$ contributes a weight $w_{k,c}$ to each OS class
+$c \in \{\text{Windows},\text{Linux},\text{macOS/BSD},\text{Net.\ device}\}$. The raw score
+and the reported confidence are
+
+\[
+S(c) \;=\; \sum_{k} w_{k,c}(\text{observed feature}),
+\qquad
+\text{Confidence}(c) \;=\; \frac{S(c)}{\sum_{c'} S(c')}\times 100\%.
+\]
+
+The engine reports $\arg\max_c S(c)$, its confidence, and the evidence list behind it. It
+is deliberately \hl{probabilistic, not deterministic}: when evidence is thin the top score
+is low, and the verdict is a coarse OS \emph{tier} (``Windows 10/11 tier''), never a
+fabricated exact build. The seven strategies below each define $w_{k,c}$.
+
+\subsection{The seven strategies}
+
+\paragraph{Idea 1 — RST (closed-port) fingerprinting.}
+When no port is open, the engine falls back to the RST returned by a \emph{closed} port,
+keyed on the initial TTL (the RST window is typically $0$):
+\begin{center}\small
+\begin{tabular}{@{}ll@{\hskip 1.4em}ll@{}}
+\toprule
+\thh{Initial TTL} & \thh{Class ($w$)} & \thh{Initial TTL} & \thh{Class ($w$)}\\
+\midrule
+128 & Windows ($+4.5$)      & 255 & Net.\ device ($+4.0$)\\
+64  & Linux ($+2.5$), BSD ($+2.0$) & -- & --\\
+\bottomrule
+\end{tabular}
+\end{center}
+This gives \hl{zero-open-port attribution}: on our Kali VM, closed ports alone scored 76\%
+Linux.
+
+\paragraph{Idea 2 — IP-ID sequence archetypes.}
+Over several probes the engine takes 16-bit modular deltas
+$\;\Delta_i = (\mathrm{ID}_i - \mathrm{ID}_{i-1}) \bmod 2^{16}\;$
+and classifies the sequence:
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\thh{Archetype} & \thh{Condition} & \thh{Class ($w$)}\\
+\midrule
+\texttt{ALL\_ZERO}           & $\forall i:\ \mathrm{ID}_i = 0$ (RFC 6864, DF set) & Linux ($+2.5$)\\
+\texttt{STRICT\_INCREMENTAL} & $\forall i:\ 1 \le \Delta_i \le 10$               & Windows ($+2.5$)\\
+\texttt{BROKEN\_INCREMENTAL} & $\forall i:\ 1 \le \Delta_i \le 1000$             & Windows ($+2.0$)\\
+\texttt{RANDOM\_POSITIVE}    & wide/pseudo-random $\Delta_i$                     & Darwin/BSD ($+1.5$)\\
+\texttt{CONSTANT\_NONZERO}   & $\forall i:\ \mathrm{ID}_i = k \neq 0$            & Net.\ device ($+2.5$)\\
+\bottomrule
+\end{tabular}
+\end{center}
+Observed: Windows~11 $\to$ strict-incremental \texttt{[27057,27059,27062]}; Android $\to$
+all-zero; iPad $\to$ random-positive.
+
+\paragraph{Idea 3 — TCP timestamp clock \& uptime.}
+From two samples the engine recovers the kernel tick rate and estimates uptime:
+\[
+R \;=\; \frac{(\mathrm{TSval}_i - \mathrm{TSval}_{i-1}) \bmod 2^{32}}{t_i - t_{i-1}}\ \text{Hz},
+\qquad
+\text{uptime} \approx \frac{\mathrm{TSval}_{\text{latest}}}{R}.
+\]
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\thh{Archetype} & \thh{Condition} & \thh{Class ($w$)}\\
+\midrule
+\texttt{HZ\_1000}      & $700 \le R \le 1400$   & Windows ($+2.0$), Linux ($+1.0$)\\
+\texttt{HZ\_250}       & $180 \le R \le 350$    & Linux ($+2.5$)\\
+\texttt{RANDOM\_OFFSET}& $\Delta\mathrm{TSval} > 10^{7}$ (RFC 7323) & macOS/BSD ($+2.5$)\\
+\bottomrule
+\end{tabular}
+\end{center}
+Observed: Windows $\approx$1000\,Hz; iPad randomised (Darwin PRNG).
+
+\paragraph{Idea 4 — ECN probe (active).}
+A crafted SYN with ECE+CWR set (flags $=\mathtt{0xC2}$) tests RFC~3168 support by how the
+reply's ECE bit comes back:
+\begin{itemize}
+\item \texttt{ECN\_SUPPORTED} — reply $\mathtt{0x52}$ (ECE reflected) $\Rightarrow$ Linux / macOS/BSD ($+2.0$).
+\item \texttt{ECN\_IGNORED} — reply $\mathtt{0x12}$ (ECE cleared) $\Rightarrow$ default Windows stack ($+2.0$).
+\item \texttt{ECN\_DROPPED} / \texttt{RST} — no ECN handshake $\Rightarrow$ network device.
+\end{itemize}
+Observed: Windows ignored ECN; Android and iPad supported it.
+
+\paragraph{Idea 5 — invalid / ambiguous TCP flags (the ``rule-breaker'').}
+RFC~793 does not define a reply to contradictory flags, so stacks diverge — a highly
+discriminating signal:
+\begin{center}\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\thh{Probe} & \thh{Flags} & \thh{Windows} & \thh{Unix (Linux/BSD)}\\
+\midrule
+SYN+FIN & \texttt{0x03} & RST on open port & silently dropped\\
+NULL    & \texttt{0x00} & RST               & dropped\\
+XMAS    & \texttt{0x29} & RST               & dropped\\
+\bottomrule
+\end{tabular}
+\end{center}
+Notably, this is the \emph{same} behaviour our own defense engine watches for
+(Section~\ref{sec:defense}).
+
+\paragraph{Idea 6 — ICMP / UDP probing battery.}
+Beyond TCP, an ICMP echo with a deliberately wrong code and a UDP probe to a closed port
+expose further quirks:
+\begin{itemize}
+\item \textbf{ICMP code normalisation} — reply code $9\!\to\!0$ vs.\ reflected code~9.
+\item \textbf{DF bit} in the echo reply, and shared TCP+ICMP IP-ID counter ($\Rightarrow$ Linux, $+3.0$).
+\item \textbf{UDP unreachable quoting length} — Windows quotes exactly 8 bytes; Linux quotes more.
+\end{itemize}
+Because Windows Firewall often drops closed-TCP RSTs while still answering ICMP echo, this
+battery is a valuable \hl{firewall-bypass fallback}.
+
+\paragraph{Idea 7 / 7.1 — cross-layer banner correlation.}
+Finally, Phase-2 banners feed the score as near-ground-truth evidence:
+\begin{center}\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\thh{Banner signature} & \thh{Attribution}\\
+\midrule
+\texttt{Microsoft-IIS}, Microsoft OpenSSH & Windows (very high)\\
+\texttt{Apache/… (Ubuntu)}, Debian OpenSSH & Linux (very high)\\
+\texttt{Server} before \texttt{Date} (RFC 7230 order) & weak corroboration\\
+\bottomrule
+\end{tabular}
+\end{center}
+When present, a banner is the single highest-confidence input the engine has.
+
+\begin{keypoint}[Signal strength ranking]
+\textbf{Strongest:} banner correlation and TCP option order (kernel-specific, hard to
+spoof). \textbf{Strong:} invalid-flag probe and multi-sample IP-ID sequencing.
+\textbf{Solid but ambiguous:} TTL (cannot split Linux from BSD alone).
+\textbf{Corroborating:} ECN and the ICMP/UDP battery (middleboxes may alter them). The
+engine's robustness comes from never trusting any single one in isolation.
+\end{keypoint}
+
+\subsection{Results across five operating systems}
+The engine was run against every stack on the testbed. Confidence is reported honestly —
+these are coarse-tier attributions, not exact-build claims.
+
+\renewcommand{\arraystretch}{1.25}
+\noindent\begin{tabularx}{\textwidth}{@{}L{3.4cm} L{3.0cm} X@{}}
+\toprule
+\hdrrow \thh{Target} & \thh{Verdict (confidence)} & \thh{Deciding evidence}\\
+\midrule
+Windows 11 desktop & Windows, 62--75\% & TTL 128; strict-incremental IP-ID; $\sim$1000\,Hz clock; ECN ignored; Windows option order.\\
+Kali Linux VM & Linux, 66--76\% & TTL 64; all-zero IP-ID (RFC 6864); Debian OpenSSH/Apache banners; ECN supported.\\
+Android 14 phone & Linux, 58\% & TTL 64; all-zero IP-ID with DF set; Linux option order.\\
+Apple iPad (iPadOS 17) & macOS/BSD, 48\% & TTL 64; random-positive IP-ID; randomised timestamp offsets; Darwin option order (WScale before Timestamp).\\
+Closed-port only (Kali) & Linux, 76\% & RST TTL 64; window 0; all-zero IP-ID; SYN+FIN silently dropped.\\
+\bottomrule
+\end{tabularx}
+\renewcommand{\arraystretch}{1.0}
+
+\noindent A fuller theoretical audit of every feature and its scoring weight is maintained
+alongside the code in \texttt{fingerprint.md}.

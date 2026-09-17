@@ -1,0 +1,24 @@
+%===================================================== APPENDIX C — RAW LOGS
+\clearpage
+\section*{\sffamily\color{accent}Appendix C — Complete Empirical Run Logs}
+\addcontentsline{toc}{section}{Appendix C — Complete Empirical Run Logs}
+
+The twelve run logs below are reproduced \textbf{in full and verbatim} — they are the
+primary evidence of the project. They are the exact console output captured during each
+live run against real hardware and virtual machines, archived under \texttt{final-log/}.
+Only non-ASCII box-drawing and arrow glyphs have been normalised to ASCII for print; every
+value, banner, verdict, and address is unchanged. Over-long lines (e.g.\ full IP-ID and port
+arrays) soft-wrap, marked with a \textcolor{rule}{$\hookrightarrow$} continuation glyph.
+
+\rawlog{full-chain.log}{C.1\quad full-chain.log — Full attack chain \& active defense (Windows 11)}
+\rawlog{cross-platform-exploit.log}{C.2\quad cross-platform-exploit.log — OS-aware exploitation (Windows + Kali)}
+\rawlog{kali.log}{C.3\quad kali.log — Kali Linux multi-test battery (closed-port, ICMP, banner)}
+\rawlog{win.log}{C.4\quad win.log — Windows baseline attack chain}
+\rawlog{win-atk-blocker.log}{C.5\quad win-atk-blocker.log — Windows firewall auto-quarantine run}
+\rawlog{scan_100_ports.log}{C.6\quad scan\_100\_ports.log — 100-port scale test}
+\rawlog{ipad.log}{C.7\quad ipad.log — Apple iPad (Darwin / BSD)}
+\rawlog{phn.log}{C.8\quad phn.log — Android phone (Linux 5.x)}
+\rawlog{ssh_quiet.log}{C.9\quad ssh\_quiet.log — SSH weak-credential exploitation (quiet mode)}
+\rawlog{ssh_attack.log}{C.10\quad ssh\_attack.log — SSH weak-credential exploitation (loud mode)}
+\rawlog{defense_win_test.log}{C.11\quad defense\_win\_test.log — Multi-vector defense on Windows Firewall}
+\rawlog{defense_kali_test.log}{C.12\quad defense\_kali\_test.log — Multi-vector defense on Linux Netfilter}
