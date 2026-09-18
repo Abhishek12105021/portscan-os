@@ -60,9 +60,9 @@ scant data. To prevent this, the engine runs a four-stage calibration pipeline:
             rounded corners=4pt,
             line width=0.8pt,
             text width=3.0cm,
-            minimum height=2.45cm,
+            minimum height=1.95cm,
             align=center,
-            inner sep=5pt
+            inner sep=4pt
         },
         stagecard_accent/.style={
             draw=accent,
@@ -70,9 +70,9 @@ scant data. To prevent this, the engine runs a four-stage calibration pipeline:
             rounded corners=4pt,
             line width=0.9pt,
             text width=3.0cm,
-            minimum height=2.45cm,
+            minimum height=1.95cm,
             align=center,
-            inner sep=5pt
+            inner sep=4pt
         },
         stagecard_highlight/.style={
             draw=accentstrong,
@@ -80,9 +80,9 @@ scant data. To prevent this, the engine runs a four-stage calibration pipeline:
             rounded corners=4pt,
             line width=1.1pt,
             text width=3.0cm,
-            minimum height=2.45cm,
+            minimum height=1.95cm,
             align=center,
-            inner sep=5pt
+            inner sep=4pt
         }
     }
 
@@ -215,8 +215,8 @@ must be silently discarded:
     ($\text{Flags} = \mathtt{0x14}$) on open ports $\implies \text{Windows } (w = +2.5)$.
     \item \textbf{Linux RFC Compliance:} Conforms to RFC~793 by silently dropping the illegal probe on open
     ports while emitting RST on closed ports $\implies \text{Linux } (w = +2.0), \text{ macOS/BSD } (w = +1.0)$.
-    \item \textbf{Darwin / BSD Filtering:} Silently drops invalid probes across both open and closed ports
-    $\implies \text{Apple Darwin / BSD } (w = +2.5)$.
+    \item \textbf{Darwin / BSD Filtering:} Silently drops invalid probes across open and closed ports
+    $\implies \text{Darwin / BSD } (w = +2.5)$.
 \end{itemize}
 
 \subsubsection{Strategy 6: Autonomous ICMP / UDP Diagnostic Battery }
@@ -274,24 +274,24 @@ Operating system releases within the same family (such as Windows 10 and Windows
 identical network stacks. The \texttt{refine\_version()} function therefore groups candidates into coarse
 version tiers using explicit stack predicates:
 
-\begin{table}[htbp]
+\begin{table}[!ht]
 \centering
-\small
-\renewcommand{\arraystretch}{1.22}
+\footnotesize
+\renewcommand{\arraystretch}{1.06}
 \caption{Version Tier Classification Predicates and Characteristic Signatures}
 \label{tab:version_tiers}
-\begin{tabularx}{\textwidth}{@{}L{3.2cm} L{4.2cm} X@{}}
+\begin{tabularx}{\textwidth}{@{}L{3.2cm} L{4.0cm} X@{}}
 \toprule
 \hdrrow \thh{Target OS Family} & \thh{Refined Version Tier} & \thh{Characteristic Stack Predicates \& Feature Values}\\
 \midrule
 \textbf{Microsoft Windows} & Windows 10 / 11 / Server 2016+ & Window $\ge 64240$, Window Scale $\ge 8$, MSS $= 1460$, $R \approx 1000$\,Hz (1\,ms tick), Strict Incremental IP-ID.\\
-\addlinespace
+\addlinespace[2pt]
 & Windows 7 / 8 / Server 2008--12 & Window $\in \{8192, 64240\}$, Window Scale $\le 8$, Timestamp option absent, Incremental IP-ID.\\
-\addlinespace
+\addlinespace[2pt]
 & Windows 9x / 2000 (Legacy) & Initial TTL $= 32$, Window $\le 16384$, Window Scale $= 0$, Timestamp absent.\\
 \midrule
 \textbf{Linux Kernel} & Modern Kernel (3.x / 4.x / 5.x / 6.x) & Window $\ge 29200$, Timestamp present ($\text{TSval} > 0$), Window Scale $\ge 7$, IP-ID \texttt{ALL\_ZERO} (RFC 6864).\\
-\addlinespace
+\addlinespace[2pt]
 & Older Kernel (2.4 / 2.6) & Window $\in \{5792, 5840\}$, Window Scale $\le 2$, Timestamp optional.\\
 \midrule
 \textbf{Apple Darwin / BSD} & macOS / iOS / Modern BSD & Initial TTL $= 64$, Option order \texttt{[MSS, WSCALE, TS, SACK]}, PRNG Timestamp offset, \texttt{RANDOM\_POSITIVE} IP-ID.\\
@@ -308,10 +308,10 @@ or Windows 7/8''}) rather than asserting unsupportable certainty.
 \subsection{Strategy Hierarchy: The Fingerprinting Tier List}
 Table~\ref{tab:tier_list} ranks all strategies by discriminative power, spoof resistance, and operational cost:
 
-\begin{table}[htbp]
+\begin{table}[!ht]
 \centering
-\small
-\renewcommand{\arraystretch}{1.20}
+\footnotesize
+\renewcommand{\arraystretch}{0.98}
 \caption{Comprehensive OS Fingerprinting Strategy Hierarchy and Effectiveness Tier List}
 \label{tab:tier_list}
 \begin{tabularx}{\textwidth}{@{}L{3.6cm} C{1.2cm} L{2.4cm} L{2.6cm} X@{}}
@@ -338,11 +338,31 @@ IPv4 DF Bit & L3 & Passive & Low & Corroborating only; universally asserted by m
 
 \FloatBarrier
 \subsection{Empirical Diagnostic Telemetry Across Heterogeneous Platforms}
-The complete diagnostic outputs below illustrate how the engine systematically analyzes incoming
-evidence across the four primary operating system platforms in our testbed.
+The diagnostic records below illustrate how the engine systematically analyzes incoming
+evidence across the five operating system testbed environments, displaying Phase~1 port scan
+observations alongside Phase~3 multi-vector telemetry.
 
 \subsubsection{Target 1: Physical Desktop Windows 11 Workstation (\texttt{192.168.0.116})}
+The diagnostic record below demonstrates multi-strategy telemetry extracted from an open-port SYN/ACK exchange:
+
 \begin{logbox}
+=================================================================
+  [PHASE 1] TCP SYN Port Scanning
+=================================================================
+  Target      : 192.168.0.116
+  Ports       : [21, 22, 80, 81]
+-----------------------------------------------------------------
+     21  OPEN                           TTL=128 WIN=65535
+     22  NO RESPONSE / POSSIBLY FILTERED
+     80  OPEN                           TTL=128 WIN=65535
+     81  NO RESPONSE / POSSIBLY FILTERED
+
+=================================================================
+  [PHASE 2] Service Banner Grabbing
+=================================================================
+  [OK]  21  FTP      -> 220 LabFTP Server (Vulnerable Demo) Ready
+  [OK]  80  HTTP     -> VulnHTTP/1.0 (Lab Demo)
+
 =================================================================
   [PHASE 3] OS Fingerprinting Telemetry: Windows 11 Workstation
 =================================================================
@@ -353,8 +373,7 @@ evidence across the four primary operating system platforms in our testbed.
 -----------------------------------------------------------------
   Diagnostic Metric Breakdown:
     - Initial TTL : 128 (~128 observed, 0 router hops) -> Windows (+4.0)
-    - Window Size : 65535 (matches Windows, Linux, Darwin) -> Supporting (+1.5)
-    - DF Bit      : Set (Modern Path MTU Discovery Stack)
+    - Window Size : 65535 (matches Windows, Linux, Darwin) | DF Bit: Set (Path MTU)
     - IP-ID Seq   : [27057, 27059, 27062] (deltas: [2, 3]) -> STRICT_INCREMENTAL (+2.5)
     - Option Order: ['MSS', 'WSCALE', 'SACK_PERMITTED', 'TIMESTAMP'] -> Windows (+3.0)
     - Timestamp   : Rate ~998.4 Hz (1ms tick interval) | Uptime: ~1d 4h -> Windows (+2.0)
@@ -372,7 +391,19 @@ evidence across the four primary operating system platforms in our testbed.
 \end{logbox}
 
 \subsubsection{Target 2: Debian GNU/Linux 6.x Virtual Machine (\texttt{192.168.56.101})}
+When all target ports are closed, the scanner ingests TCP RST frames to perform zero-open-port fingerprinting:
+
 \begin{logbox}
+=================================================================
+  [PHASE 1] TCP SYN Port Scanning
+=================================================================
+  Target      : 192.168.56.101
+  Ports       : [22, 80, 81]
+-----------------------------------------------------------------
+     22  CLOSED                         TTL= 64 WIN=0
+     80  CLOSED                         TTL= 64 WIN=0
+     81  CLOSED                         TTL= 64 WIN=0
+
 =================================================================
   [PHASE 3] OS Fingerprinting Telemetry: Kali Linux Target
 =================================================================
@@ -383,8 +414,7 @@ evidence across the four primary operating system platforms in our testbed.
 -----------------------------------------------------------------
   Diagnostic Metric Breakdown:
     - Initial TTL : 64 (~64 observed, 0 router hops) -> Linux / BSD (+2.5)
-    - Window Size : 0 (Closed port RST packet)
-    - DF Bit      : Clear on RST
+    - Window Size : 0 (Closed port RST packet) | DF Bit: Clear on RST
     - IP-ID Seq   : [0, 0, 0] (deltas: [0, 0]) -> ALL_ZERO (RFC 6864 Compliance) (+2.5)
     - Rule Breaker: SYN+FIN probe silently dropped on open port -> Linux (+2.0)
     - ICMP Probe  : Code 9 verbatim reflected in Echo Reply; quotes 64 bytes -> Linux (+2.0)
@@ -400,6 +430,20 @@ evidence across the four primary operating system platforms in our testbed.
 
 \subsubsection{Target 3: Apple iPad Tablet running iPadOS 17 / Darwin BSD (\texttt{192.168.0.152})}
 \begin{logbox}
+=================================================================
+  [PHASE 1] TCP SYN Port Scanning
+=================================================================
+  Target      : 192.168.0.152
+  Ports       : [80, 8080]
+-----------------------------------------------------------------
+     80  OPEN                           TTL= 64 WIN=65535
+   8080  CLOSED                         TTL= 64 WIN=0
+
+=================================================================
+  [PHASE 2] Service Banner Grabbing
+=================================================================
+  [OK]   80  HTTP     -> HTTP/1.1 200 OK (VLC Web Sharing)
+
 =================================================================
   [PHASE 3] OS Fingerprinting Telemetry: Apple iPadOS Target
 =================================================================
@@ -429,6 +473,20 @@ evidence across the four primary operating system platforms in our testbed.
 \subsubsection{Target 4: Android 14 Mobile Smartphone (\texttt{192.168.0.169})}
 \begin{logbox}
 =================================================================
+  [PHASE 1] TCP SYN Port Scanning
+=================================================================
+  Target      : 192.168.0.169
+  Ports       : [2221, 2122]
+-----------------------------------------------------------------
+   2221  OPEN                           TTL= 64 WIN=65535
+   2122  CLOSED                         TTL= 64 WIN=0
+
+=================================================================
+  [PHASE 2] Service Banner Grabbing
+=================================================================
+  [OK] 2221  FTP      -> 220 Service ready for new user. (WiFi FTP)
+
+=================================================================
   [PHASE 3] OS Fingerprinting Telemetry: Android 14 Smartphone
 =================================================================
   Target Host : 192.168.0.169:2221 (Android 14 / Linux Kernel 5.x)
@@ -454,24 +512,32 @@ evidence across the four primary operating system platforms in our testbed.
 \end{logbox}
 
 \subsubsection{Target 5: Windows 11 Host Behind Firewall (Autonomous ICMP Echo Fallback)}
-When all probed TCP ports are dropped or filtered by an active host-based or edge firewall (leaving zero open or closed TCP ports available for SYN/ACK or RST telemetry), the fingerprinting engine autonomously activates its Layer-3 ICMP Echo fallback pipeline:
+When all probed TCP ports are dropped or filtered by an edge firewall (leaving zero open or closed TCP ports available), the engine autonomously activates its Layer-3 ICMP Echo fallback pipeline:
 
 \begin{logbox}
 =================================================================
+  [PHASE 1] TCP SYN Port Scanning
+=================================================================
+  Target      : 192.168.0.116
+  Ports       : [21, 80, 81]
+-----------------------------------------------------------------
+     21  NO RESPONSE / POSSIBLY FILTERED
+     80  NO RESPONSE / POSSIBLY FILTERED
+     81  NO RESPONSE / POSSIBLY FILTERED
+
+=================================================================
   [PHASE 3] OS Fingerprinting Telemetry: Windows 11 (Firewall Isolated)
 =================================================================
-  Target Host : 192.168.0.116 (Windows 11 Desktop behind Firewall)
-  Candidate   : ICMP Echo Reply (Zero Open/Closed TCP Ports Available)
+  Target Host : 192.168.0.116 (Windows 11 Desktop behind Active Firewall)
+  Candidate   : Autonomous ICMP Echo Reply (Zero Open/Closed TCP Ports)
   Likely OS   : Windows                   Confidence : 94%
   Version Tier: Windows 10 / 11 / Server 2016+ (47%) / Windows 7 / 8 (47%)
 -----------------------------------------------------------------
   Diagnostic Metric Breakdown:
     - Candidate   : Autonomous ICMP Echo Reply (RFC 792 Echo Probe)
     - Initial TTL : 128 (~128 observed, 0 router hops) -> Windows (+4.0)
-    - Window Size : 0 (ICMP non-transport candidate)
-    - DF Bit      : Clear on ICMP Reply -> Windows (+2.0)
-    - Timestamp   : Absent on ICMP channel
-    - ICMP Probe  : Normalized Code 9 to Code 0 with TTL 128 -> Windows (+3.0)
+    - Window Size : 0 (ICMP non-transport candidate) | DF Bit: Clear on ICMP Reply
+    - ICMP Probe  : Normalized non-standard Code 9 to Code 0 with TTL 128 -> Windows (+3.0)
 -----------------------------------------------------------------
   Normalized Probability Distribution:
     Windows           94%  [#############################################]
@@ -480,3 +546,54 @@ When all probed TCP ports are dropped or filtered by an active host-based or edg
     macOS / BSD        0%  []
 =================================================================
 \end{logbox}
+
+\subsubsection{Comparative Diagnostic Metrics Across All Five Testbed Targets}
+Table~\ref{tab:fp_matrix} consolidates the empirical feature vectors, option orderings, and attribution verdicts observed across all five operating systems evaluated in our testbed:
+
+\begin{table}[!ht]
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.08}
+\caption{Cross-Platform Empirical Diagnostic Telemetry Across Evaluation Targets}
+\label{tab:fp_matrix}
+\begin{tabularx}{\textwidth}{@{}L{2.5cm} L{1.8cm} L{2.2cm} L{2.2cm} X L{2.0cm}@{}}
+\toprule
+\hdrrow \thh{Target System} & \thh{Probe Channel} & \thh{TTL / Window} & \thh{IP-ID Archetype} & \thh{Option Order \& Stack Quirks} & \thh{Verdict \& Conf.}\\
+\midrule
+\textbf{Target 1: Win 11 Desktop}\newline\tiny(192.168.0.116:80) &
+Open-Port SYN/ACK &
+TTL 128 (0 hops)\newline Win 65535 &
+\texttt{STRICT\_INCR}\newline[27057, 27059...] &
+M-W-S-T order; 1000\,Hz clock; RST on open probe; IIS banner hint. &
+\textbf{Windows}\newline(62\%, Tier 71\%)\\
+\addlinespace[2pt]
+\textbf{Target 2: Kali Linux VM}\newline\tiny(192.168.56.101:80) &
+Closed-Port RST &
+TTL 64 (0 hops)\newline Win 0 (RST) &
+\texttt{ALL\_ZERO}\newline[0, 0, 0] (RFC 6864) &
+Zero open ports; SYN+FIN dropped; ICMP Code 9 verbatim; Debian banner. &
+\textbf{Linux}\newline(76\%, Tier 100\%)\\
+\addlinespace[2pt]
+\textbf{Target 3: Apple iPad}\newline\tiny(192.168.0.152:80) &
+Open-Port SYN/ACK &
+TTL 64 (0 hops)\newline Win 65535 &
+\texttt{RANDOM\_POS}\newline[42195, 18432...] &
+M-W-T-S order (WScale before TS); non-linear clock; UDP quotes 28B. &
+\textbf{macOS / BSD}\newline(48\%, Tier 100\%)\\
+\addlinespace[2pt]
+\textbf{Target 4: Android 14}\newline\tiny(192.168.0.169:2221) &
+Open-Port SYN/ACK &
+TTL 64 (0 hops)\newline Win 65160 &
+\texttt{ALL\_ZERO}\newline[0, 0, 0] (RFC 6864) &
+M-S-T-W order (SACK before TS); WScale=7; WiFi FTP banner hint. &
+\textbf{Linux}\newline(58\%, Tier 100\%)\\
+\addlinespace[2pt]
+\textbf{Target 5: Win 11 Firewall}\newline\tiny(192.168.0.116) &
+ICMP Echo Reply &
+TTL 128 (0 hops)\newline Win 0 (ICMP) &
+N/A (ICMP Channel) &
+Zero open/closed TCP ports; Code 9 normalized to 0; TTL 128 reply. &
+\textbf{Windows}\newline(94\%, Tier 47\%)\\
+\bottomrule
+\end{tabularx}
+\end{table}

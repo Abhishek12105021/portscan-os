@@ -30,69 +30,75 @@ operating system socket abstraction:
 
 \begin{figure}[htbp]
 \centering
-\begin{minipage}[t]{0.485\textwidth}
+\begin{minipage}[t]{0.238\textwidth}
 \centering
-{\color{accent}\sffamily\bfseries\scriptsize (a) Standard RFC 793 Handshake}\\[4pt]
-\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.82, every node/.style={transform shape}]
-    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (c) at (0, 0) {Client};
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (s) at (3.8, 0) {Server};
-    \draw[thick, color=accent] (c.south) -- (0, -3.4);
-    \draw[thick, color=rule] (s.south) -- (3.8, -3.4);
-    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {SYN ($seq = x$)} (3.8, -1.0);
-    \draw[-{Stealth[length=4pt]}, thick] (3.8, -1.4) -- node[above, sloped, font=\tiny] {SYN/ACK ($seq = y, ack = x+1$)} (0, -1.9);
-    \draw[-{Stealth[length=4pt]}, thick] (0, -2.3) -- node[above, sloped, font=\tiny] {ACK ($ack = y+1$)} (3.8, -2.8);
-    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.9, -3.2) {ESTABLISHED (Application Logged)};
-\end{tikzpicture}
+{\color{accent}\sffamily\bfseries\scriptsize (a) RFC 793 Handshake}\\[2pt]
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\sffamily\scriptsize]
+    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (c) at (0, 0) {Client};
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (s) at (2.6, 0) {Server};
+    \draw[thick, color=accent] (c.south) -- (0, -3.3);
+    \draw[thick, color=rule] (s.south) -- (2.6, -3.3);
+    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {SYN ($seq = x$)} (2.6, -1.0);
+    \draw[-{Stealth[length=4pt]}, thick] (2.6, -1.4) -- node[above, sloped, font=\tiny] {SYN/ACK ($ack = x+1$)} (0, -1.9);
+    \draw[-{Stealth[length=4pt]}, thick] (0, -2.3) -- node[above, sloped, font=\tiny] {ACK ($ack = y+1$)} (2.6, -2.8);
+    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.3, -3.1) {ESTABLISHED};
+\end{tikzpicture}%
+}
 \end{minipage}%
 \hfill
-\begin{minipage}[t]{0.485\textwidth}
+\begin{minipage}[t]{0.238\textwidth}
 \centering
-{\color{accent}\sffamily\bfseries\scriptsize (b) Half-Open SYN Scan: Open Port}\\[4pt]
-\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.82, every node/.style={transform shape}]
-    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (sc) at (0, 0) {Scanner};
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (th) at (3.8, 0) {Target};
-    \draw[thick, color=accent] (sc.south) -- (0, -3.4);
-    \draw[thick, color=rule] (th.south) -- (3.8, -3.4);
-    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {Raw SYN ($dst = 80$)} (3.8, -1.0);
-    \draw[-{Stealth[length=4pt]}, thick, color=accent] (3.8, -1.3) -- node[above, sloped, font=\tiny] {SYN/ACK (Flags=\texttt{0x12})} (0, -1.8);
-    \draw[-{Stealth[length=4pt]}, thick, dashed, color=accentstrong] (0, -2.4) -- (2.4, -2.4);
-    \draw[thick, color=accentstrong] (2.3, -2.25) -- (2.5, -2.55);
-    \draw[thick, color=accentstrong] (2.3, -2.55) -- (2.5, -2.25);
-    \node[above=1pt, font=\tiny\color{accentstrong}\bfseries] at (1.2, -2.35) {Withhold Final ACK};
-    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.9, -3.1) {State: \textbf{OPEN} (Unlogged)};
-\end{tikzpicture}
-\end{minipage}
-
-\vspace{6pt}
-
-\begin{minipage}[t]{0.485\textwidth}
-\centering
-{\color{accent}\sffamily\bfseries\scriptsize (c) Half-Open SYN Scan: Closed Port}\\[4pt]
-\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.82, every node/.style={transform shape}]
-    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (sc) at (0, 0) {Scanner};
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (th) at (3.8, 0) {Target};
-    \draw[thick, color=accent] (sc.south) -- (0, -3.1);
-    \draw[thick, color=rule] (th.south) -- (3.8, -3.1);
-    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {Raw SYN ($dst = 443$)} (3.8, -1.0);
-    \draw[-{Stealth[length=4pt]}, thick, color=accentstrong] (3.8, -1.4) -- node[above, sloped, font=\tiny] {RST (Flags=\texttt{0x04})} (0, -1.9);
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.9, -2.7) {State: \textbf{CLOSED} (RST Telemetry Ingested)};
-\end{tikzpicture}
+{\color{accent}\sffamily\bfseries\scriptsize (b) SYN Scan: Open}\\[2pt]
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\sffamily\scriptsize]
+    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (sc) at (0, 0) {Scanner};
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (th) at (2.6, 0) {Target};
+    \draw[thick, color=accent] (sc.south) -- (0, -3.3);
+    \draw[thick, color=rule] (th.south) -- (2.6, -3.3);
+    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {Raw SYN (:80)} (2.6, -1.0);
+    \draw[-{Stealth[length=4pt]}, thick, color=accent] (2.6, -1.3) -- node[above, sloped, font=\tiny] {SYN/ACK (\texttt{0x12})} (0, -1.8);
+    \draw[-{Stealth[length=4pt]}, thick, dashed, color=accentstrong] (0, -2.3) -- (1.6, -2.3);
+    \draw[thick, color=accentstrong] (1.5, -2.15) -- (1.7, -2.45);
+    \draw[thick, color=accentstrong] (1.5, -2.45) -- (1.7, -2.15);
+    \node[above=1pt, font=\tiny\color{accentstrong}\bfseries] at (0.9, -2.25) {Withhold ACK};
+    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.3, -3.1) {State: \textbf{OPEN}};
+\end{tikzpicture}%
+}
 \end{minipage}%
 \hfill
-\begin{minipage}[t]{0.485\textwidth}
+\begin{minipage}[t]{0.238\textwidth}
 \centering
-{\color{accent}\sffamily\bfseries\scriptsize (d) Half-Open SYN Scan: Filtered Port}\\[4pt]
-\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.82, every node/.style={transform shape}]
-    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (sc) at (0, 0) {Scanner};
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.6cm] (th) at (3.8, 0) {Firewall};
-    \draw[thick, color=accent] (sc.south) -- (0, -3.1);
-    \draw[thick, color=rule] (th.south) -- (3.8, -3.1);
-    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {Raw SYN ($dst = 8080$)} (3.4, -1.0);
-    \node[draw=accentstrong, fill=accentsoft, rounded corners=1pt, font=\tiny\bfseries, text=accentstrong] at (3.8, -1.0) {DROP};
-    \draw[thick, dashed, color=rule] (0.6, -1.7) -- (3.2, -1.7) node[midway, above, font=\tiny] {No Response Received};
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny, align=center] at (1.9, -2.2) {Wait $t_{\text{timeout}} = 1.5\,\text{s}$};
-    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.9, -2.8) {State: \textbf{FILTERED} (Timeout)};
-\end{tikzpicture}
+{\color{accent}\sffamily\bfseries\scriptsize (c) SYN Scan: Closed}\\[2pt]
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\sffamily\scriptsize]
+    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (sc) at (0, 0) {Scanner};
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (th) at (2.6, 0) {Target};
+    \draw[thick, color=accent] (sc.south) -- (0, -3.3);
+    \draw[thick, color=rule] (th.south) -- (2.6, -3.3);
+    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {Raw SYN (:443)} (2.6, -1.0);
+    \draw[-{Stealth[length=4pt]}, thick, color=accentstrong] (2.6, -1.4) -- node[above, sloped, font=\tiny] {RST (\texttt{0x04})} (0, -1.9);
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.3, -2.8) {State: \textbf{CLOSED}};
+\end{tikzpicture}%
+}
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.238\textwidth}
+\centering
+{\color{accent}\sffamily\bfseries\scriptsize (d) SYN Scan: Filtered}\\[2pt]
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[font=\sffamily\scriptsize]
+    \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (sc) at (0, 0) {Scanner};
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=2.5pt, minimum width=1.4cm] (th) at (2.6, 0) {Firewall};
+    \draw[thick, color=accent] (sc.south) -- (0, -3.3);
+    \draw[thick, color=rule] (th.south) -- (2.6, -3.3);
+    \draw[-{Stealth[length=4pt]}, thick] (0, -0.5) -- node[above, sloped, font=\tiny] {Raw SYN (:8080)} (2.3, -0.9);
+    \node[draw=accentstrong, fill=accentsoft, rounded corners=1pt, font=\tiny\bfseries, text=accentstrong] at (2.6, -0.9) {DROP};
+    \draw[thick, dashed, color=rule] (0.4, -1.6) -- (2.2, -1.6) node[midway, above, font=\tiny] {No Response};
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny, align=center] at (1.3, -2.1) {Wait $1.5\,\text{s}$};
+    \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny\bfseries, align=center] at (1.3, -2.8) {State: \textbf{FILTERED}};
+\end{tikzpicture}%
+}
 \end{minipage}
 \caption{Protocol Timing Diagrams: RFC~793 3-Way Handshake vs.\ Half-Open Probe Classifications.}
 \label{fig:timing_scan}
@@ -130,31 +136,31 @@ Target MAC: 98:fe:3e:5b:c3:27 | Inter-Probe Delay: 0.50s
   1025  OPEN                           TTL=128 WIN=65535
   1433  CLOSED                         TTL=128 WIN=0
   1723  CLOSED                         TTL=128 WIN=0
-  [Summary: 4 Open, 46 Closed, 0 Filtered]
+[Summary: 4 Open, 46 Closed, 0 Filtered]
 
 [PHASE 3] OS Fingerprinting (Candidate: Open-Port TCP SYN/ACK on Port 135)
   Likely OS  : Windows                 Confidence : 71%
   Version    : Windows 10 / 11 / Server 2016+
-                71%  Windows 10 / 11 / Server 2016+
-                29%  Windows 7 / 8 / Vista / Server 2008-2012
-  TTL        : 128 (initial 128, 0 hops)    Window: 65535    DF bit: set
+               71% Windows 10 / 11 / Server 2016+
+               29% Windows 7 / 8 / Vista / Server 2008-2012
+  TTL        : 128 (initial 128, 0 hops)   Window: 65535    DF bit: set
   Options    : ('MSS', 1460), ('NOP',), ('WSCALE', 8), ('SACK_PERMITTED',), ('TIMESTAMP', ...)
-  Evidence   : initial TTL 128 | Window 65535 | Windows Option Order | IP-ID strictly incremental (deltas: [1, 1, 1, 1...], avg 1.3) | Timestamp clock ~1001.0 Hz (1ms tick)
+  Evidence   : initial TTL 128 | Window 65535 | Windows Option Order | IP-ID strictly incremental (deltas: [1, 1, 1, ...], avg 1.3) | Timestamp clock ~1001.0 Hz (1ms tick)
 
 === BATCH 2: Ports 1883 to 49164 (Top 50 High Ports, RPC, Cloud & Web Services) ===
 [PHASE 1] TCP SYN Port Scanning (Evaluating Zero-Open-Port Environment):
-  1883  CLOSED   TTL=128 WIN=0      2049  CLOSED   TTL=128 WIN=0
-  2121  CLOSED   TTL=128 WIN=0      2221  CLOSED   TTL=128 WIN=0
-  3000  CLOSED   TTL=128 WIN=0      3306  CLOSED   TTL=128 WIN=0
-  3389  CLOSED   TTL=128 WIN=0      5000  CLOSED   TTL=128 WIN=0
-  8080  CLOSED   TTL=128 WIN=0      8443  CLOSED   TTL=128 WIN=0
-  9000  CLOSED   TTL=128 WIN=0     49152  CLOSED   TTL=128 WIN=0
-  [Summary: 0 Open, 50 Closed, 0 Filtered]
+  1883  CLOSED  TTL=128 WIN=0    2049  CLOSED  TTL=128 WIN=0
+  2121  CLOSED  TTL=128 WIN=0    2221  CLOSED  TTL=128 WIN=0
+  3000  CLOSED  TTL=128 WIN=0    3306  CLOSED  TTL=128 WIN=0
+  3389  CLOSED  TTL=128 WIN=0    5000  CLOSED  TTL=128 WIN=0
+  8080  CLOSED  TTL=128 WIN=0    8443  CLOSED  TTL=128 WIN=0
+  9000  CLOSED  TTL=128 WIN=0   49152  CLOSED  TTL=128 WIN=0
+[Summary: 0 Open, 50 Closed, 0 Filtered]
 
 [PHASE 3] OS Fingerprinting (Candidate: Closed-Port TCP RST Fallback)
   Likely OS  : Windows                 Confidence : 69%
   Version    : Windows family (closed-port RST fallback telemetry)
-  TTL        : 128 (initial 128, 0 hops)    Window: 0        DF bit: set
+  TTL        : 128 (initial 128, 0 hops)   Window: 0        DF bit: set
   IP ID Seq  : [13207, 13208, 13209, 13210, 13211, 13212, 13213, 13215, 13217, 13218...]
   IP ID Class: STRICT_INCREMENTAL (deltas: [1, 1, 1, 1, 1, 1, 2, 2, 1, 1...], avg 1.1)
   Evidence   : TCP RST initial TTL 128 | Window 0 | Strict incremental IP ID global counter | Zero open ports required!
@@ -176,7 +182,7 @@ capture software identity strings:
 \begin{minipage}[t]{0.485\textwidth}
 \centering
 {\color{accent}\sffamily\bfseries\scriptsize (a) Passive Service Banner: FTP (Port 21)}\\[4pt]
-\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.82, every node/.style={transform shape}]
+\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.78, every node/.style={transform shape}]
     \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.8cm] (g) at (0, 0) {Banner Grabber};
     \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.8cm] (s) at (4.0, 0) {FTP Server (:21)};
     \draw[thick, color=accent] (g.south) -- (0, -3.8);
@@ -191,7 +197,7 @@ capture software identity strings:
 \begin{minipage}[t]{0.485\textwidth}
 \centering
 {\color{accent}\sffamily\bfseries\scriptsize (b) Active Service Banner: HTTP (Port 80)}\\[4pt]
-\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.82, every node/.style={transform shape}]
+\begin{tikzpicture}[font=\sffamily\scriptsize, scale=0.78, every node/.style={transform shape}]
     \node[draw=accent, fill=accentsoft, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.8cm] (g) at (0, 0) {Banner Grabber};
     \node[draw=rule, fill=codebg, rounded corners=2pt, font=\bfseries, inner sep=3pt, minimum width=1.8cm] (s) at (4.0, 0) {HTTP Server (:80)};
     \draw[thick, color=accent] (g.south) -- (0, -3.8);
@@ -224,9 +230,7 @@ The Phase~2 banner output from each testbed target is shown below:
   Banners found : 2/2 (100% Acquisition Rate)
   Cross-Layer   : Correlated daemon signatures dispatched to Phase 3
 =================================================================
-\end{logbox}
 
-\begin{logbox}
 =================================================================
   [PHASE 2] Service Banner Grabbing: Kali Linux Target (192.168.56.101)
 =================================================================
@@ -259,9 +263,7 @@ The Phase~2 banner output from each testbed target is shown below:
     - Cross-layer banner on port 22 (SSH) matches Windows signature 'OpenSSH_for_Windows' (Microsoft Windows OpenSSH port)
   Banners found : 1/1 (100% Acquisition Rate)
 =================================================================
-\end{logbox}
 
-\begin{logbox}
 =================================================================
   [PHASE 2] Service Banner Grabbing: Mobile Subnet Targets (iPad & Android)
 =================================================================

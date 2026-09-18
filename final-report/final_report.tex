@@ -7,7 +7,7 @@
 \documentclass[11pt,a4paper]{article}
 
 %------------------------------------------------------------------ Geometry
-\usepackage[margin=2.4cm,top=2.5cm,bottom=2.5cm]{geometry}
+\usepackage[margin=2.0cm,top=2.0cm,bottom=2.0cm]{geometry}
 
 %---------------------------------------------------------------- Typography
 \usepackage{mathptmx}                 % Times body + math
@@ -16,7 +16,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{microtype}
 \usepackage{parskip}
-\setlength{\parskip}{5pt}
+\setlength{\parskip}{3pt}
 \raggedbottom
 
 %-------------------------------------------------------- Tables / lists / fig
@@ -171,8 +171,8 @@
 {\large\bfseries Submitted By}\\[0.5cm]
 {\renewcommand{\arraystretch}{1.35}\normalsize
 \begin{tabular}{rl}
-\textbf{2105033} & Abhishek Roy\\
 \textbf{2105032} & Nawriz Ahmed Turjo\\
+\textbf{2105033} & Abhishek Roy\\
 \end{tabular}}
 \end{minipage}%
 \begin{minipage}[t]{0.48\textwidth}
@@ -233,13 +233,6 @@ the multi-device empirical verification.
 \toprule
 \hdrrow \thh{Member} & \thh{Responsibility}\\
 \midrule
-\textbf{Abhishek Roy}\newline\small(2105033) &
-Binary framing and raw packet I/O: the from-scratch Ethernet/IPv4/TCP builder and
-parser, RFC~1071 Internet checksum, Npcap \texttt{ctypes} bindings, and ARP/interface
-resolution via the Windows IP Helper API. The TCP~SYN half-open scanning engine and
-port-state tracking. Core OS-fingerprinting heuristics and version-tier calibration.
-The \textbf{HTTP directory-traversal} and \textbf{SSH weak-credential} exploit modules.\\
-\addlinespace
 \textbf{Nawriz Ahmed Turjo}\newline\small(2105032) &
 Advanced fingerprinting and active stimulus probing: the SYN option-offering probe,
 closed-port RST fallback, IP-ID, timestamp, ECN, and ICMP-UDP strategies, plus cross-layer
@@ -247,11 +240,19 @@ banner correlation. The service banner grabber. The \textbf{FTP exploit suite}
 (anonymous login, write$\rightarrow$web-shell$\rightarrow$RCE, and bounce) with
 \textbf{OS-aware payload selection}. The multi-vector active-defense engine and the
 end-to-end attack orchestration.\\
+\addlinespace
+\textbf{Abhishek Roy}\newline\small(2105033) &
+Binary framing and raw packet I/O: the from-scratch Ethernet/IPv4/TCP builder and
+parser, RFC~1071 Internet checksum, Npcap \texttt{ctypes} bindings, and ARP/interface
+resolution via the Windows IP Helper API. The TCP~SYN half-open scanning engine and
+port-state tracking. Core OS-fingerprinting heuristics and version-tier calibration.
+The \textbf{HTTP directory-traversal} and \textbf{SSH weak-credential} exploit modules.\\
 \bottomrule
 \end{tabularx}
 \renewcommand{\arraystretch}{1.0}
 
 \clearpage
+\setcounter{tocdepth}{2}
 {\hypersetup{linkcolor=ink}\tableofcontents}
 \clearpage
 

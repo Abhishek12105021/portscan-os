@@ -57,48 +57,50 @@ Manual observation. &
 \renewcommand{\arraystretch}{1.0}
 
 \subsection{Lab topology}
-The verification testbed is a single isolated private LAN. The attacker is a Windows~11
-laptop running the toolkit over an Npcap adapter; the primary victim is a Windows~11
-desktop hosting the vulnerable lab services; and a set of secondary targets on the same
-subnet exercises the fingerprinting engine against genuinely different TCP/IP stacks.
+\noindent
+\begin{minipage}[t]{0.45\textwidth}
+\vspace{0pt}
+The verification testbed is a single isolated private LAN. The attacker is a Windows~11 laptop running the toolkit over an Npcap adapter; the primary victim is a Windows~11 desktop hosting the vulnerable lab services; and a set of secondary targets on the same subnet exercises the fingerprinting engine against genuinely different TCP/IP stacks.
 
-\begin{figure}[htbp]
+\vspace{3pt}
+The attacker never leaves this private range: an RFC~1918 check refuses any non-private target, and the scanner is bounded (Section~\ref{sec:safety}) so that it cannot be repurposed as a flooding tool.
+\end{minipage}\hfill
+\begin{minipage}[t]{0.53\textwidth}
+\vspace{0pt}
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
-  font=\sffamily\scriptsize, >={Stealth[length=1.8mm]},
+  font=\sffamily\scriptsize, >={Stealth[length=1.6mm]},
   box/.style={rectangle, rounded corners=2pt, draw=rule, line width=0.6pt,
-              fill=codebg, minimum height=0.75cm, align=center, inner sep=3pt},
-  atk/.style={box, draw=accent, line width=1.1pt, fill=accentsoft},
-  vic/.style={box, draw=accent, line width=1.1pt},
-  hub/.style={rectangle, rounded corners=2pt, draw=accent, line width=0.9pt,
-              fill=white, align=center, inner sep=4pt, minimum height=0.85cm}]
+              fill=codebg, minimum height=0.68cm, align=center, inner sep=2.5pt},
+  atk/.style={box, draw=accent, line width=1.0pt, fill=accentsoft},
+  vic/.style={box, draw=accent, line width=1.0pt},
+  hub/.style={rectangle, rounded corners=2pt, draw=accent, line width=0.8pt,
+              fill=white, align=center, inner sep=3pt, minimum height=0.75cm}]
 
 % attacker (left)
-\node[atk] (atk) at (0,0) {\textbf{Attacker}\\[0.5pt]Windows 11 Laptop\\[0.5pt]\tiny scanner $\cdot$ fingerprint $\cdot$ exploits};
+\node[atk] (atk) at (0,0) {\textbf{Attacker}\\[0.5pt]\tiny Win 11 Laptop\\[0.5pt]\tiny scanner $\cdot$ fp $\cdot$ exploits};
 
 % LAN hub (centre)
-\node[hub] (sw) at (5.2,0) {\textbf{Isolated LAN}\\[0.5pt]\tiny 192.168.x.0/24};
+\node[hub] (sw) at (2.9,0) {\textbf{Isolated LAN}\\[0.5pt]\tiny 192.168.x.0/24};
 
 % targets (right column, compact)
-\node[vic]  (vic)  at (10.8,1.6)  {\textbf{Primary Victim}: Windows 11\\[0.5pt]\tiny FTP 21 $\cdot$ HTTP 80 $\cdot$ SSH 22 $\cdot$ defense};
-\node[box] (kali) at (10.8,0.55)  {Kali Linux VM \tiny(Netfilter)};
-\node[box] (mob)  at (10.8,-0.55) {Android $\cdot$ iPadOS / Darwin};
-\node[box] (rtr)  at (10.8,-1.6) {Embedded-Linux router};
+\node[vic]  (vic)  at (6.2,1.35)  {\textbf{Victim}: Win 11\\[0.5pt]\tiny FTP $\cdot$ HTTP $\cdot$ SSH $\cdot$ Def};
+\node[box] (kali) at (6.2,0.45)  {Kali VM \tiny(Netfilter)};
+\node[box] (mob)  at (6.2,-0.45) {Android $\cdot$ iPadOS};
+\node[box] (rtr)  at (6.2,-1.35) {Embedded Router};
 
 % attacker -> hub
-\draw[->,line width=0.9pt,accent] (atk) -- node[above=1pt,font=\tiny\color{accent}]{raw SYN / probes} (sw);
+\draw[->,line width=0.8pt,accent] (atk) -- node[above=1pt,font=\tiny\color{accent}]{raw SYN} (sw);
 
 % hub -> each target
-\draw[->,line width=0.7pt,rule] (sw) -- (vic);
-\draw[->,line width=0.7pt,rule] (sw) -- (kali);
-\draw[->,line width=0.7pt,rule] (sw) -- (mob);
-\draw[->,line width=0.7pt,rule] (sw) -- (rtr);
-\end{tikzpicture}
-\caption{Heterogeneous verification testbed. One attacker drives probes across five
-distinct operating-system stacks on an isolated private LAN.}
+\draw[->,line width=0.6pt,rule] (sw) -- (vic);
+\draw[->,line width=0.6pt,rule] (sw) -- (kali);
+\draw[->,line width=0.6pt,rule] (sw) -- (mob);
+\draw[->,line width=0.6pt,rule] (sw) -- (rtr);
+\end{tikzpicture}%
+}
+\vspace{-2pt}
+\captionof{figure}{Heterogeneous verification testbed. One attacker drives probes across five distinct OS stacks on an isolated LAN.}
 \label{fig:topology}
-\end{figure}
-
-\noindent The attacker never leaves this private range: an RFC~1918 check refuses any
-non-private target, and the scanner is bounded (Section~\ref{sec:safety}) so that it
-cannot be repurposed as a flooding tool.
+\end{minipage}

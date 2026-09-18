@@ -58,11 +58,19 @@ To ensure robust, production-grade operation, three safeguards are enforced:
 \end{enumerate}
 
 \subsection{Fast SYN Scanning Rate-Threshold Interception Timeline}
-Figure~\ref{fig:fast_defense} illustrates the operational mechanics of the fast sliding-window detector ($W_1 = 10.0\,\text{s}$). When an automated scanner dispatches rapid multi-port probes, the engine tracks both the cumulative probe frequency and unique destination port cardinality. The eighth probe at $t=7.0\,\text{s}$ breaches the burst rate threshold ($\theta_{\text{count}} = 8$ across $\ge 5$ distinct ports), triggering instantaneous injection of an inbound quarantine rule into the kernel packet filter. The ninth probe at $t=8.5\,\text{s}$ is intercepted and dropped before reaching application sockets.
+Figure~\ref{fig:fast_defense}(a) illustrates the operational mechanics of the fast sliding-window detector ($W_1 = 10.0\,\text{s}$). When an automated scanner dispatches rapid multi-port probes, the engine tracks both the cumulative probe frequency and unique destination port cardinality. The eighth probe at $t=7.0\,\text{s}$ breaches the burst rate threshold ($\theta_{\text{count}} = 8$ across $\ge 5$ distinct ports), triggering instantaneous injection of an inbound quarantine rule into the kernel packet filter. The ninth probe at $t=8.5\,\text{s}$ is intercepted and dropped before reaching application sockets.
+
+\subsection{Slow Stealth Scan Detection and Long-Window Trapping Timeline}
+To evade rate-based sliding windows, sophisticated adversaries deliberately inject inter-packet delays ($\Delta t \ge 2.5\,\text{s}$). As illustrated in Figure~\ref{fig:slow_defense}(b), such pacing ensures that at most $3$ to $4$ probes fall within any 10-second interval, staying comfortably beneath the fast threshold $\theta_{\text{count}} = 8$ and rendering single-window rate limiting ineffective.
+
+To counter this evasion strategy, the defense engine maintains a secondary 60-second cumulative sliding monitor ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$ SYNs). Even with deliberate delay injection, the state table aggregates stealth probes over the extended observation horizon. At $t=50.0\,\text{s}$, the arrival of the 20th probe trips the cumulative threshold, triggering immediate firewall isolation and dropping probe~21 at $t=55.0\,\text{s}$.
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+\begin{minipage}{\textwidth}
+\centering
+{\color{accent}\sffamily\bfseries\footnotesize (a) Fast SYN Scanning Sliding-Window Threshold Interception ($W_1 = 10.0\,\text{s}$, $\theta_{\text{count}} = 8$ across $\ge 5$ ports)}\\[3pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.74, every node/.style={transform shape}]
     % Time Axis
     \draw[thick, -{Stealth[length=6pt]}, color=ink] (0, 0) -- (14.5, 0) node[right, font=\scriptsize\bfseries] {Time (s)};
     
@@ -112,7 +120,7 @@ Figure~\ref{fig:fast_defense} illustrates the operational mechanics of the fast 
     \draw[-{Stealth[length=4pt]}, thick, color=accentstrong] (9.6, -0.45) -- (9.6, -0.85);
     \node[draw=rule, fill=codebg, rounded corners=2pt, font=\tiny, align=center] at (9.6, -1.25) {
         \textbf{\color{accent}Dynamic Firewall Quarantine Injected via \texttt{netsh} / \texttt{iptables}}\\
-        \texttt{\scriptsize netsh advfirewall add rule dir=in action=block remoteip=192.168.0.105}
+        \texttt{\scriptsize netsh advfirewall firewall add rule dir=in action=block remoteip=192.168.0.105}
     };
 
     % 9th Probe Blocked
@@ -125,19 +133,14 @@ Figure~\ref{fig:fast_defense} illustrates the operational mechanics of the fast 
     \draw[line width=1.2pt, color=accentstrong] (12.25, 0.4) -- (12.75, 0.85);
     \draw[line width=1.2pt, color=accentstrong] (12.25, 0.85) -- (12.75, 0.4);
 \end{tikzpicture}
-\caption{Fast SYN Scanning Sliding-Window Detection and Mitigation Timeline ($W_1 = 10.0\,\text{s}$, $\theta_{\text{count}} = 8$ SYNs across $\ge 5$ distinct ports). Rapid multi-port sweeping breaches the rate threshold at $t=7.0\,\text{s}$, triggering instantaneous kernel firewall rule injection; the subsequent probe at $t=8.5\,\text{s}$ is dropped.}
-\label{fig:fast_defense}
-\label{fig:timing_defense}
-\end{figure}
+\end{minipage}
 
-\subsection{Slow Stealth Scan Detection and Long-Window Trapping Timeline}
-To evade rate-based sliding windows, sophisticated adversaries deliberately inject inter-packet delays ($\Delta t \ge 2.5\,\text{s}$). As illustrated in Figure~\ref{fig:slow_defense}, such pacing ensures that at most $3$ to $4$ probes fall within any 10-second interval, staying comfortably beneath the fast threshold $\theta_{\text{count}} = 8$ and rendering single-window rate limiting ineffective.
+\vspace{8pt}
 
-To counter this evasion strategy, the defense engine maintains a secondary 60-second cumulative sliding monitor ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$ SYNs). Even with deliberate delay injection, the state table aggregates stealth probes over the extended observation horizon. At $t=50.0\,\text{s}$, the arrival of the 20th probe trips the cumulative threshold, triggering immediate firewall isolation and dropping probe~21 at $t=55.0\,\text{s}$.
-
-\begin{figure}[htbp]
+\begin{minipage}{\textwidth}
 \centering
-\begin{tikzpicture}[font=\sffamily\small, scale=0.88, every node/.style={transform shape}]
+{\color{accent}\sffamily\bfseries\footnotesize (b) Slow Stealth Scanning Cumulative Long-Window Trapping ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$, $\Delta t \ge 2.5\,\text{s}$)}\\[3pt]
+\begin{tikzpicture}[font=\sffamily\small, scale=0.74, every node/.style={transform shape}]
     % Time Axis
     \draw[thick, -{Stealth[length=6pt]}, color=ink] (0, 0) -- (14.8, 0) node[right, font=\scriptsize\bfseries] {Time (s)};
 
@@ -197,16 +200,19 @@ To counter this evasion strategy, the defense engine maintains a secondary 60-se
     \draw[line width=1.2pt, color=accentstrong] (13.1, 0.35) -- (13.5, 0.75);
     \draw[line width=1.2pt, color=accentstrong] (13.1, 0.75) -- (13.5, 0.35);
 \end{tikzpicture}
-\caption{Slow Stealth Scanning Cumulative Long-Window Trapping Timeline ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$ SYNs, $\Delta t \ge 2.5\,\text{s}$). The attacker paces probes to evade the 10-second fast burst window ($\le 4$ probes per 10\,s), but the 60-second cumulative sliding monitor aggregates state over the extended horizon, trapping probe~20 at $t=50.0\,\text{s}$ and dropping probe~21 at $t=55.0\,\text{s}$.}
+\end{minipage}
+\caption{Active Defense Sliding-Window Detection and Dynamic Quarantine Timelines. (a)~Fast sliding-window detector ($W_1 = 10.0\,\text{s}$, $\theta_{\text{count}} = 8$ SYNs across $\ge 5$ distinct ports) intercepting rapid multi-port sweeps at $t=7.0\,\text{s}$ with immediate firewall rule injection and dropping probe~9. (b)~Cumulative slow sliding-window detector ($W_2 = 60.0\,\text{s}$, $\theta_{\text{slow}} = 20$ SYNs, $\Delta t \ge 2.5\,\text{s}$) trapping stealth probes spanning long intervals at $t=50.0\,\text{s}$ and blocking subsequent traffic.}
+\label{fig:defense_timelines}
+\label{fig:fast_defense}
 \label{fig:slow_defense}
+\label{fig:timing_defense}
 \end{figure}
 
 \FloatBarrier
 \subsection{Empirical Diagnostic Logs: Active Defense in Action}
 
 \subsubsection{Evaluation 1: Windows Defender Firewall Dynamic Quarantine \& Decoy Honeyport}
-The log below captures the Windows defense agent detecting a fast scan, tripping on decoy port~81,
-trapping an invalid SYN+FIN probe, and releasing quarantine via the background TTL daemon:
+The log below captures the Windows defense agent across all empirical validation scenarios (A through F): detecting a fast scan, tripping on decoy port~81, accumulating low-and-slow stealth probes, trapping an invalid SYN+FIN probe, granting whitelisted administrative immunity, and releasing quarantine via the background TTL daemon:
 
 \begin{logbox}
 =============================================================================
@@ -227,10 +233,35 @@ Mitigation: Active Dynamic Windows Defender Firewall Rule Injection (--block)
   [ALERT] 192.168.0.105 | hit canary honeyport (81)  [Zero-Delay Instant Quarantine]
   [MITIGATION] Injected quarantine rule: CustomPortScanBlock_192_168_0_105 (TTL: 60s)
 
+[SCENARIO C: Low-and-Slow Stealth Scan Trapping (W2 = 60.0s, Threshold = 20 SYNs)]
+  SYN 192.168.0.105 -> 192.168.0.116:21    window_count=1   distinct_ports=1
+  SYN 192.168.0.105 -> 192.168.0.116:22    window_count=2   distinct_ports=2
+  SYN 192.168.0.105 -> 192.168.0.116:80    window_count=3   distinct_ports=3
+  SYN 192.168.0.105 -> 192.168.0.116:135   window_count=4   distinct_ports=4
+  ... (Probes spaced by 2.5s keep fast window_count <= 4; bypasses W1 detector) ...
+  SYN 192.168.0.105 -> 192.168.0.116:123   window_count=4   distinct_ports=4
+  [ALERT] 192.168.0.105 | slow stealth scan (SYN=20 within 60.0s)
+  [MITIGATION] Blocked TCP traffic from 192.168.0.105
+               Firewall rule: CustomPortScanBlock_192_168_0_105 (Windows Defender Firewall)
+               Trigger reason: slow stealth scan (SYN=20 within 60.0s)
+               Auto-release  : after 90s (self-healing)
+
 [SCENARIO D: RFC 793 Rule-Breaker Flag Anomaly Trapping]
-  SYN+FIN 192.168.0.105 -> 192.168.0.116:21
-  [CRITICAL ALERT] invalid TCP flag combination (SYN+FIN, 0x03) on port 21
+  SYN 192.168.0.105 -> 192.168.0.116:21    window_count=1   distinct_ports=1
+  SYN 192.168.0.105 -> 192.168.0.116:21    window_count=2   distinct_ports=1
+  [CRITICAL ALERT] invalid TCP flag combination (SYN+FIN (Rule-Breaker), 0x03) on port 21
   [MITIGATION] Severity Critical: Injected quarantine rule (Quarantine TTL: 300s)
+
+[SCENARIO E: Trusted Whitelisting Protection (False-Positive Immunity)]
+  SYN 192.168.0.105 -> 192.168.0.116:21    window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:22    window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:80    window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:81    window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:135   window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:139   window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:443   window_count=0   distinct_ports=0
+  SYN 192.168.0.105 -> 192.168.0.116:445   window_count=0   distinct_ports=0
+  Result: 0 alerts triggered, 0 dropped packets; administrative sweep succeeds uninterrupted.
 
 [SCENARIO F: Self-Healing Auto-Release Background Daemon]
   [MITIGATION] Released quarantine block on 192.168.0.105 (TTL 60s elapsed)
