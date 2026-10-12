@@ -1,0 +1,275 @@
+%==============================================================================
+% CSE 406 Security Lab Project — Showcase / Presentation Outline
+% Metropolis theme (mtheme). Compile with:  xelatex showcase.tex  (twice)
+%   or  pdflatex showcase.tex  (twice)
+%
+% One deck covering every stage of the recon -> exploitation -> defense chain,
+% so the outline for presenting (and the key talking points) is in one place.
+%==============================================================================
+\documentclass[10pt,aspectratio=169]{beamer}
+
+\usetheme{metropolis}
+\metroset{sectionpage=progressbar, progressbar=frametitle, numbering=fraction}
+
+\usepackage{appendixnumberbeamer}
+\usepackage{booktabs}
+
+% Accent colour tuned toward a "security / terminal" feel
+\definecolor{AccentTeal}{HTML}{2A9D8F}
+\definecolor{AccentRed}{HTML}{E63946}
+\setbeamercolor{frametitle}{bg=AccentTeal}
+\setbeamercolor{progress bar}{fg=AccentTeal}
+\setbeamercolor{alerted text}{fg=AccentRed}
+
+% A tiny helper for the two-tone "field = meaning" look
+\newcommand{\kv}[2]{\textbf{#1} \textcolor{gray}{\textrightarrow} #2}
+
+\title{Port Scanning with OS \& Version Detection}
+\subtitle{A from-scratch Nmap: Recon \textrightarrow{} Exploitation \textrightarrow{} Defense}
+\date{CSE 406 --- Computer Security Sessional}
+\author{Project Showcase \& Presentation Outline}
+\institute{Department of CSE, BUET}
+
+\begin{document}
+
+\maketitle
+
+%------------------------------------------------------------------------------
+\begin{frame}{The whole pipeline at a glance}
+  A single attacker toolkit that chains five stages, plus a defender that
+  watches the same wire.
+  \begin{center}
+  \begin{tabular}{@{}rl@{}}
+    \toprule
+    \textbf{Stage} & \textbf{What it produces} \\
+    \midrule
+    1. Port scanning      & open / closed / filtered ports (raw SYN) \\
+    2. Banner grabbing    & \emph{what} service + version runs on each port \\
+    3. OS fingerprinting  & probabilistic OS family + version tier \\
+    4. Attacking          & OS-aware, chained exploits with proof-of-access \\
+    5. Defending          & multi-vector scan detector + auto-mitigation \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \begin{block}{The one-line pitch}
+    Every frame, checksum and heuristic is \alert{hand-built} --- no Nmap, no
+    Scapy. Npcap is used only as raw Layer-2 packet I/O on Windows.
+  \end{block}
+\end{frame}
+
+%==============================================================================
+\section{Stage 1 --- Port Scanning}
+%==============================================================================
+\begin{frame}{Stage 1 --- TCP SYN Port Scanning}
+  \textbf{Goal:} find open ports without completing the handshake (half-open scan).
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \textbf{How it works}
+      \begin{itemize}
+        \item Hand-craft \kv{Ethernet + IPv4 + TCP}{} frames byte-by-byte,
+              incl.\ the Internet checksum.
+        \item ARP-resolve the target MAC; send one \alert{SYN} per port.
+        \item Classify the reply:
+          \begin{itemize}
+            \item \textbf{SYN/ACK} = OPEN
+            \item \textbf{RST} = CLOSED
+            \item no reply = FILTERED / no-response
+          \end{itemize}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Key talking points}
+      \begin{itemize}
+        \item Raw send/recv via \textbf{Npcap} ctypes bindings --- not sockets.
+        \item First SYN/ACK (or RST) is captured as the \emph{fingerprint candidate}.
+        \item \alert{Safety bounds:} private IPv4 only, $\le 50$ ports/run,
+              min 0.2\,s delay, one SYN per port, no IP-range sweep.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{0.4em}
+  \footnotesize\textcolor{gray}{Files: \texttt{common/packet.py}, \texttt{common/npcap.py}, \texttt{attacker/scanner.py}}
+\end{frame}
+
+%==============================================================================
+\section{Stage 2 --- Banner Grabbing}
+%==============================================================================
+\begin{frame}{Stage 2 --- Service Banner Grabbing}
+  \textbf{Goal:} identify \emph{what} runs on each open port and its version.
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \textbf{How it works}
+      \begin{itemize}
+        \item Uses \emph{full} TCP sockets --- a complete handshake is needed to
+              talk to the service (no stealth gain from raw frames here).
+        \item \textbf{Passive} services (FTP, SSH, SMTP, POP3\dots) announce a
+              banner on connect --- just read it.
+        \item \textbf{Active} services (HTTP) need a nudge: send
+              \texttt{HEAD / HTTP/1.0} and parse the \texttt{Server:} header.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Key talking points}
+      \begin{itemize}
+        \item Port\,\textrightarrow\,protocol hint table (21=ftp, 22=ssh, 80=http\dots).
+        \item Regex-parses version strings, e.g.\ \texttt{vsftpd 3.0.5},
+              \texttt{OpenSSH\_8.2p1}, \texttt{Microsoft-IIS/10.0}.
+        \item Banners are fed forward as \alert{cross-layer evidence} for
+              fingerprinting (Stage 3) and payload choice (Stage 4).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{0.4em}
+  \footnotesize\textcolor{gray}{File: \texttt{attacker/banner.py}}
+\end{frame}
+
+%==============================================================================
+\section{Stage 3 --- OS Fingerprinting}
+%==============================================================================
+\begin{frame}{Stage 3 --- OS Fingerprinting (the centrepiece)}
+  \textbf{Goal:} a \alert{probability distribution} over OS families with
+  evidence --- not a single black-box guess.
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Passive TCP/IP features}
+      \begin{itemize}
+        \item Initial \textbf{TTL} (32/64/128/255, hop-corrected)
+        \item TCP \textbf{window} size
+        \item \textbf{DF} bit; \textbf{TCP option order} (M,W,S vs M,S,T,W\dots)
+        \item MSS, window-scale, SACK, timestamp presence
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Active / multi-probe features}
+      \begin{itemize}
+        \item \textbf{IP ID} sequence class (zero / incremental / random)
+        \item \textbf{TCP timestamp} clock rate \textrightarrow\ Hz + \emph{uptime}
+        \item \textbf{ECN} (RFC 3168) negotiation behaviour
+        \item \textbf{Invalid-flags} probe (SYN+FIN rule-breaker)
+        \item \textbf{ICMP/UDP} battery (echo code, DF, quote length)
+        \item \textbf{Cross-layer} banner correlation
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Stage 3 --- Why it is honest (and why that wins)}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \textbf{Coarse-but-honest version tiers}
+      \begin{itemize}
+        \item Windows: \emph{legacy 9x} / \emph{7-8-Vista} / \emph{10-11-Server}
+        \item Linux: \emph{2.4-2.6} vs \emph{modern 3/4/5+}
+        \item macOS\,/\,BSD; Network device
+        \item Ties are shown as a \emph{range}, each tier with its own \%.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \textbf{Talking points}
+      \begin{itemize}
+        \item Every score carries a human-readable \textbf{reason} line.
+        \item Confidence is \alert{damped} when evidence is thin.
+        \item Self-authored scoring, transparent --- vs Nmap's 2000-entry DB.
+        \item TCP fields alone cannot split Win7/8/10/11 (all TTL 128, DF, same
+              option layout) --- so we don't pretend to.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \footnotesize\textcolor{gray}{File: \texttt{attacker/fingerprint.py}}
+\end{frame}
+
+%==============================================================================
+\section{Stage 4 --- Attacking}
+%==============================================================================
+\begin{frame}{Stage 4 --- OS-Aware Exploitation}
+  \textbf{Goal:} turn recon into proof-of-access, adapting payloads to the
+  fingerprinted OS.
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Phase 4 --- payload selection}
+      \begin{itemize}
+        \item Windows \textrightarrow\ \texttt{win.ini}, \texttt{whoami}
+        \item Linux \textrightarrow\ \texttt{/etc/passwd}, \texttt{id}
+        \item macOS/BSD \textrightarrow\ \texttt{/etc/passwd}, \texttt{/etc/hosts}
+      \end{itemize}
+      \textbf{Phase 5 --- exploit battery}
+      \begin{itemize}
+        \item FTP anonymous login (T1078)
+        \item FTP write \textrightarrow\ web shell \textrightarrow\ \alert{RCE} (chained)
+        \item FTP bounce (PORT-command pivot)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{More exploits}
+      \begin{itemize}
+        \item SSH weak-credential attack (T1110), bounded wordlist
+        \item HTTP directory traversal (OS-aware payloads + URL-encoded bypasses)
+      \end{itemize}
+      \textbf{Safety / ethics}
+      \begin{itemize}
+        \item Web shell runs a \alert{whitelist} of read-only commands only.
+        \item Automatic cleanup of uploaded artifacts.
+        \item Bounded attempts, delays, private IPv4 targets only.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \footnotesize\textcolor{gray}{Files: \texttt{attacker/exploits/*.py}, \texttt{os\_payloads.py}}
+\end{frame}
+
+%==============================================================================
+\section{Stage 5 --- Defending}
+%==============================================================================
+\begin{frame}{Stage 5 --- Multi-Vector Scan Detection \& Mitigation}
+  \textbf{Goal:} the flip side --- detect our own attack on the wire and shut it down.
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Detection vectors}
+      \begin{itemize}
+        \item \textbf{Fast SYN scan:} sliding window --- threshold + distinct-port
+              diversity (e.g.\ $\ge 8$ SYN / $\ge 5$ ports in 10\,s).
+        \item \textbf{Slow / stealth scan:} long-window rate check (60\,s).
+        \item \textbf{Invalid flags:} NULL, FIN-only, XMAS, SYN+FIN.
+        \item \textbf{Canary honeyport:} any touch = instant alert.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Mitigation \& forensics}
+      \begin{itemize}
+        \item \textbf{Cross-platform block:} Windows \texttt{netsh} /
+              Linux \texttt{iptables}.
+        \item \textbf{Self-healing:} auto-release after TTL (default 300\,s).
+        \item \textbf{Whitelist} to suppress known-good sources.
+        \item Structured JSON \textbf{incident log} (who, when, why, rule).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \footnotesize\textcolor{gray}{Files: \texttt{defense/detector.py}, \texttt{defense/main.py}}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[standout]
+  Recon \textrightarrow{} Fingerprint \textrightarrow{} Exploit \textrightarrow{} Defend \\[0.5em]
+  \large every byte hand-built.
+\end{frame}
+
+%------------------------------------------------------------------------------
+\begin{frame}{If asked --- one-line answers to keep ready}
+  \small
+  \begin{itemize}
+    \item \textbf{Why raw frames?} To do a true half-open SYN scan and read
+          stack quirks sockets hide.
+    \item \textbf{Why probabilistic OS guess?} No small TCP/IP field set uniquely
+          IDs a modern OS --- p0f / Nmap weigh features in concert too.
+    \item \textbf{What's novel vs Nmap?} Transparent, self-authored scoring with
+          per-feature reasons and honest version tiers.
+    \item \textbf{Is it safe?} Private targets, bounded probes/attempts,
+          read-only proofs, whitelist commands, auto-cleanup.
+    \item \textbf{Attacker \emph{and} defender?} Yes --- same wire, both sides,
+          demonstrating detection of our own tooling.
+  \end{itemize}
+\end{frame}
+
+\end{document}

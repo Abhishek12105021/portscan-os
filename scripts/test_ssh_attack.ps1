@@ -20,7 +20,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = "utf-8"
 
 # Target & Adapter Settings (from your active Wi-Fi configuration)
-$TARGET_IP = "192.168.1.104"
+$TARGET_IP = "10.175.160.165"
 $ADAPTER   = "\Device\NPF_{79613882-4F62-495C-9891-92E06A2C6E9B}"
 
 $PROJECT_ROOT = Split-Path $PSScriptRoot -Parent
