@@ -153,6 +153,18 @@ Automated multi-modal runners are available in `scripts/`:
 
 ---
 
+### 6. Turnkey Demonstration & Scale Testing
+Run the master PowerShell demonstration script for an automated presentation walkthrough of all core phases:
+```powershell
+# Master demo runbook for project evaluation (scans, fallback, exploits, defense triggers)
+.\scripts\demonstration.ps1
+
+# Dual-batch 100-port scale test (respects MAX_PROBES = 50 limit)
+.\scripts\test_scan_100.ps1
+```
+
+---
+
 ## 🎯 7 Advanced OS Fingerprinting Techniques
 
 | # | Technique | Target Signature | Technical Mechanism |
@@ -169,7 +181,7 @@ Automated multi-modal runners are available in `scripts/`:
 
 ## 📊 Empirical Test Suite & Verified Logs (`final-log/`)
 
-The repository maintains **12 definitive empirical verification logs** in [`final-log/`](final-log/) documenting exhaustive testing across all features, scanning modes, and platforms:
+The repository maintains **13 definitive empirical verification logs** in [`final-log/`](final-log/) documenting exhaustive testing across all features, scanning modes, and platforms:
 
 | # | Log File | Target Platform | Environment & IP | Tested Ports | Defense State | Exploits Executed | OS Fingerprint Attribution |
 |---|---|---|---|---|---|---|---|
@@ -185,8 +197,9 @@ The repository maintains **12 definitive empirical verification logs** in [`fina
 | **10** | [`ssh_attack.log`](final-log/ssh_attack.log) | **Windows SSH (Loud Mode)** | Windows 11 (`192.168.1.104`) | `22` (SSH) | Passive | SSH Brute Force $\to$ Trophy, Payloads, Voice Alert | **Windows (75%)** (Microsoft OpenSSH banner) |
 | **11** | [`defense_kali_test.log`](final-log/defense_kali_test.log) | **Kali Linux VM** (Multi-Vector Defense, Scenarios A-G) | VirtualBox Host-Only (`192.168.56.101`) | `21, 22, 80, 81, 135, 139, 443, 445, 8080` + 20 | **Active — Linux `iptables`** | Severed pre-recon (banners/OS probes dropped) | **Linux (55%–68%)** |
 | **12** | [`defense_win_test.log`](final-log/defense_win_test.log) | **Windows 11 Desktop** (Multi-Vector Defense, Scenarios A-G) | Physical LAN (`192.168.0.116`) | `21, 22, 80, 81, 135, 139, 443, 445, 8080` + 20 | **Active — Windows `netsh`** | Severed pre-recon (handshakes aborted) | **Windows (71%–75%)** |
+| **13** | [`win-icmp.log`](final-log/win-icmp.log) | **Windows 11 Desktop** (Autonomous ICMP Fallback) | Physical LAN (`192.168.0.116`) | `21, 80, 81` (all filtered) | **Active** (Firewall Inbound Drop) | Skipped | **Windows (94%)** (ICMP Echo Reply: TTL 128, Code 0 normalized, DF clear, IP ID 52494) |
 
-*Scenarios A-G cover: fast SYN scan detection, canary honeyport trap, low-and-slow stealth scan, invalid TCP flag inspection, whitelist immunity, self-healing TTL auto-release, and JSON incident log / firewall audit — see logs #11 and #12 above.*
+*Scenarios A-G cover: fast SYN scan detection, canary honeyport trap, low-and-slow stealth scan, invalid TCP flag inspection, whitelist immunity, self-healing TTL auto-release, and JSON incident log / firewall audit — see logs #11 and #12 above. Autonomous ICMP fallback when all TCP ports are firewalled is verified in log #13.*
 
 *For complete technical details and architectural comparisons, see [`final-log/README.md`](final-log/README.md).*
 
@@ -198,20 +211,30 @@ The repository maintains **12 definitive empirical verification logs** in [`fina
 ├── README.md                      # Master project overview & architectural documentation
 ├── HOW_TO_RUN.md                  # Comprehensive terminal runbook and walkthrough
 ├── testflow.md                    # Complete end-to-end testing workflow cheat sheet
-├── testflow_commands.ps1          # Streamlined copy-pasteable execution command script
-├── design-report/                 # Project design report and technical diagrams
+├── showcase/                      # Project presentation slide deck
+│   ├── showcase.tex               # Beamer (Metropolis theme) presentation source
+│   └── showcase.pdf               # Compiled presentation PDF
+├── spec/                          # Academic course requirements
+│   └── CSE406ProjectJan2026.pdf   # Project specification document
+├── rsc/                           # Technical reference papers & baseline materials
+│   ├── Default_TTL_Values.jpg     # OS initial TTL baseline chart
+│   └── *.pdf                      # Academic references on TCP/IP stack fingerprinting
+├── design-report/                 # Project initial design report
+│   ├── design_report.tex          # Design report LaTeX source
+│   └── design_report.pdf          # Compiled design report PDF
 ├── final-report/                  # Final LaTeX project report (submission copy)
-│   ├── final_report.tex           # Report source (11 sections: intro -> conclusion)
+│   ├── final_report.tex           # Report source (10 core sections + appendices)
 │   ├── final_report.pdf           # Compiled final report PDF
-│   ├── sections/                  # Per-section .tex includes (implementation, fingerprint,
-│   │                               #   attack steps, results, defense, verification, etc.)
-│   ├── logs/                      # Copy of the 11 empirical logs cited in the report
-│   └── rsc/                       # Report assets (e.g. university logo)
+│   ├── design-red.md              # In-depth architectural & design specification
+│   ├── sections/                  # Modular .tex sections (intro, implementation, attack,
+│   │                              #   fingerprint, exploits, defense, results, etc.)
+│   └── rsc/                       # Report figures & proof-of-access screenshots
 ├── scripts/                       # Automated execution harnesses
+│   ├── demonstration.ps1          # Master turnkey demonstration runner for presentations
 │   ├── test_ssh_attack.ps1        # SSH exploit runner (Quiet and Loud modes)
 │   ├── test_scan_100.ps1          # Dual-batch 100-port scale test runner
 │   └── testflow_commands.ps1      # Clean command cheat sheet (no hardcoded paths)
-├── final-log/                     # Definitive 12-log empirical verification suite
+├── final-log/                     # Definitive 13-log empirical verification suite
 │   ├── README.md                  # Comprehensive log index & codebase coverage matrix
 │   ├── full-chain.log             # End-to-end 5-phase attack & active defense isolation
 │   ├── cross-platform-exploit.log # Adaptive OS-aware exploit comparison (Win vs Kali)
@@ -224,7 +247,8 @@ The repository maintains **12 definitive empirical verification logs** in [`fina
 │   ├── ssh_quiet.log              # SSH stealth reconnaissance log
 │   ├── ssh_attack.log             # SSH loud mode log (trophy, payloads, voice alert)
 │   ├── defense_win_test.log       # Multi-vector defense battery (Scenarios A-G, Windows)
-│   └── defense_kali_test.log      # Multi-vector defense battery (Scenarios A-G, Kali Linux)
+│   ├── defense_kali_test.log      # Multi-vector defense battery (Scenarios A-G, Kali Linux)
+│   └── win-icmp.log               # Autonomous ICMP echo fallback verification log
 └── Imp/
     ├── common/
     │   ├── packet.py              # Raw frame builder/parser & RFC 1071 Internet checksums
